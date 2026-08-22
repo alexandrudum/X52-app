@@ -21,6 +21,7 @@ import {
 import { X52BrandMark } from "./components/X52BrandMark";
 import { X52Logo } from "./components/X52Logo";
 import { Sparkline } from "./components/Sparkline";
+import { BackendControlPanel } from "./components/admin/BackendControlPanel";
 
 interface Pipeline {
   id: string;
@@ -37,6 +38,7 @@ interface Pipeline {
 
 export default function Dashboard() {
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [viewMode, setViewMode] = useState<"operations" | "backend">("operations");
   const [activeTab, setActiveTab] = useState<string>("pipelines");
   const [filterText, setFilterText] = useState("");
   const [isIngesting, setIsIngesting] = useState(false);
@@ -177,6 +179,21 @@ export default function Dashboard() {
                 52 / 52 NODES ACTIVE
               </span>
             </div>
+            <Navbar.Divider />
+            <Button
+              minimal
+              icon="dashboard"
+              text="Operations Console"
+              active={viewMode === "operations"}
+              onClick={() => setViewMode("operations")}
+            />
+            <Button
+              minimal
+              icon="control"
+              text="Backend Control Panel"
+              active={viewMode === "backend"}
+              onClick={() => setViewMode("backend")}
+            />
           </Navbar.Group>
 
           <Navbar.Group align={Alignment.RIGHT} style={{ gap: "10px" }}>
@@ -194,7 +211,11 @@ export default function Dashboard() {
           </Navbar.Group>
         </Navbar>
 
-        {/* Hero Banner with Integrated X52 Brandmark */}
+        {viewMode === "backend" ? (
+          <BackendControlPanel isDarkMode={isDarkMode} />
+        ) : (
+          <>
+            {/* Hero Banner with Integrated X52 Brandmark */}
         <Card
           elevation={Elevation.TWO}
           style={{
@@ -627,6 +648,8 @@ export default function Dashboard() {
             </div>
           )}
         </Drawer>
+          </>
+        )}
 
       </div>
     </div>
