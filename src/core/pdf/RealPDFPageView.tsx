@@ -207,7 +207,7 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
         }}
       />
 
-      {/* Floating Warning Tags Overlaid on the PDF Page */}
+      {/* Floating Small Warning Tags with Marker Lines Overlaid on the PDF Page */}
       {pageDiffs.length > 0 && (
         <div
           style={{
@@ -216,56 +216,57 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
             right: "16px",
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
-            maxWidth: "320px",
+            gap: "6px",
+            maxWidth: "240px",
             zIndex: 5,
           }}
         >
           {pageDiffs.map((diff) => {
             const isSelected = selectedDiffId === diff.id;
+            const diffNum = diffItems.findIndex((d) => d.id === diff.id) + 1;
             return (
               <div
                 key={diff.id}
                 onClick={() => onSelectDiff(diff.id)}
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 8px",
+                  borderRadius: "20px",
                   backgroundColor: isSelected
                     ? isPre
                       ? "#ef4444"
                       : "#22c55e"
                     : isPre
-                    ? "rgba(239, 68, 68, 0.95)"
-                    : "rgba(34, 197, 94, 0.95)",
+                    ? "rgba(239, 68, 68, 0.9)"
+                    : "rgba(34, 197, 94, 0.9)",
                   color: "#ffffff",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                   cursor: "pointer",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: 700,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "2px",
-                  border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.3)",
-                  transform: isSelected ? "scale(1.03)" : "scale(1)",
+                  border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.4)",
+                  transform: isSelected ? "scale(1.05)" : "scale(1)",
                   transition: "all 0.15s ease",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <Tag
-                    intent={isPre ? Intent.DANGER : Intent.SUCCESS}
-                    round
-                    style={{
-                      fontWeight: 800,
-                      fontSize: "10px",
-                      backgroundColor: "#ffffff",
-                      color: isPre ? "#ef4444" : "#16a34a",
-                    }}
-                  >
-                    {isPre ? "WARNING" : "REVISED"} [{diff.id.toUpperCase()}]
-                  </Tag>
-                  <span style={{ fontSize: "10px", opacity: 0.9 }}>{diff.category}</span>
-                </div>
-                <div style={{ marginTop: "2px" }}>{diff.title}</div>
+                <Tag
+                  round
+                  minimal
+                  style={{
+                    fontWeight: 800,
+                    fontSize: "9px",
+                    backgroundColor: "#ffffff",
+                    color: isPre ? "#ef4444" : "#16a34a",
+                    padding: "1px 5px",
+                  }}
+                >
+                  #{diffNum}
+                </Tag>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {diff.title}
+                </span>
               </div>
             );
           })}

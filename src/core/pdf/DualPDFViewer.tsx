@@ -46,7 +46,8 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [syncScroll, setSyncScroll] = useState<boolean>(true);
-  const [renderMode, setRenderMode] = useState<"real-pdf" | "paragraph-diff">("real-pdf");
+  const [renderMode, setRenderMode] = useState<"real-pdf" | "paragraph-diff">(fileA && fileB ? "real-pdf" : "paragraph-diff");
+  const [diffsOnly, setDiffsOnly] = useState<boolean>(false);
 
   const leftPaneRef = useRef<HTMLDivElement>(null);
   const rightPaneRef = useRef<HTMLDivElement>(null);
@@ -141,6 +142,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
+          {/* Page Switcher */}
           <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
             <span className="x52-label">Page</span>
             <ButtonGroup variant="outlined" size="small">
@@ -172,6 +174,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
 
           <Divider />
 
+          {/* Diff Stepper */}
           <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
             <span className="x52-label">Delta</span>
             <Tooltip content="Previous difference" placement="bottom">
@@ -207,21 +210,33 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
-          {/* Mode Switcher: Real PDF Canvas vs Extracted Paragraphs */}
-          <ButtonGroup variant="outlined" size="small">
-            <Button
-              icon="document"
-              text="Real PDF Canvas"
-              active={renderMode === "real-pdf"}
-              onClick={() => setRenderMode("real-pdf")}
-            />
-            <Button
-              icon="paragraph"
-              text="Paragraph Diff"
-              active={renderMode === "paragraph-diff"}
-              onClick={() => setRenderMode("paragraph-diff")}
-            />
-          </ButtonGroup>
+          {/* Differences Only Filter Button */}
+          <Button
+            size="small"
+            icon="filter-keep"
+            intent={diffsOnly ? Intent.PRIMARY : Intent.NONE}
+            text={diffsOnly ? "Showing Changes Only" : "Show Changes Only"}
+            active={diffsOnly}
+            onClick={() => setDiffsOnly(!diffsOnly)}
+          />
+
+          {/* Mode Switcher: Real PDF Canvas vs Paragraph Diff */}
+          {fileA && fileB && (
+            <ButtonGroup variant="outlined" size="small">
+              <Button
+                icon="document"
+                text="Real PDF Canvas"
+                active={renderMode === "real-pdf"}
+                onClick={() => setRenderMode("real-pdf")}
+              />
+              <Button
+                icon="paragraph"
+                text="Text Diff"
+                active={renderMode === "paragraph-diff"}
+                onClick={() => setRenderMode("paragraph-diff")}
+              />
+            </ButtonGroup>
+          )}
 
           <Tooltip
             content={syncScroll ? "Scrolling is locked across both panes" : "Panes scroll independently"}
@@ -231,7 +246,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
               variant="minimal"
               size="small"
               icon={syncScroll ? "lock" : "unlock"}
-              text={syncScroll ? "Scroll locked" : "Scroll free"}
+              text={syncScroll ? "Locked" : "Free"}
               active={syncScroll}
               aria-pressed={syncScroll}
               onClick={() => setSyncScroll((prev) => !prev)}
@@ -240,7 +255,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
 
           <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
             <span className="x52-label">Zoom</span>
-            <div style={{ width: "110px" }}>
+            <div style={{ width: "100px" }}>
               <Slider
                 min={ZOOM_MIN}
                 max={ZOOM_MAX}
@@ -278,6 +293,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
           onScroll={handleScroll}
           file={fileA}
           renderMode={renderMode}
+          diffsOnly={diffsOnly}
         />
         <DocumentPane
           side="post"
@@ -292,6 +308,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
           onScroll={handleScroll}
           file={fileB}
           renderMode={renderMode}
+          diffsOnly={diffsOnly}
         />
       </div>
     </div>
@@ -311,6 +328,7 @@ interface DocumentPaneProps {
   onScroll: (side: DiffSide) => void;
   file?: File | null;
   renderMode: "real-pdf" | "paragraph-diff";
+  diffsOnly: boolean;
 }
 
 const DocumentPane: React.FC<DocumentPaneProps> = ({
@@ -326,9 +344,11 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
   onScroll,
   file,
   renderMode,
+  diffsOnly,
 }) => {
   const isPre = side === "pre";
-  const paragraphs = page?.paragraphs || [];
+  const rawParagraphs = page?.paragraphs || [];
+  const paragraphs = diffsOnly ? rawParagraphs.filter((p) => !!p.diffId) : rawParagraphs;
 
   return (
     <Card
@@ -406,127 +426,130 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
             side={side}
           />
         ) : (
-          /* Paragraph Diff View */
+          /* Sleek Paragraph Diff View with Small Tag + Continuous Indicator Line */
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "16px",
+              gap: "14px",
               fontSize: `calc(13.5px * ${zoomLevel} / 100)`,
               lineHeight: "1.65",
               fontFamily: "Georgia, serif",
               width: "100%",
             }}
           >
-            {paragraphs.map((para, idx) => {
-              const diff = para.diffId ? diffItems.find((d) => d.id === para.diffId) : undefined;
-              const isSelected = diff && selectedDiffId === diff.id;
-              const hasDiff = !!diff;
+            {paragraphs.length > 0 ? (
+              paragraphs.map((para, idx) => {
+                const diff = para.diffId ? diffItems.find((d) => d.id === para.diffId) : undefined;
+                const isSelected = diff && selectedDiffId === diff.id;
+                const hasDiff = !!diff;
+                const diffNum = diff ? diffItems.findIndex((d) => d.id === diff.id) + 1 : 0;
 
-              return (
-                <div
-                  key={para.id || idx}
-                  onClick={() => diff && onSelectDiff(diff.id)}
-                  style={{
-                    position: "relative",
-                    padding: hasDiff ? "16px 20px" : "6px 10px",
-                    borderRadius: "8px",
-                    backgroundColor: isSelected
-                      ? isPre
-                        ? "rgba(239, 68, 68, 0.22)"
-                        : "rgba(34, 197, 94, 0.22)"
-                      : hasDiff
-                      ? isPre
-                        ? "rgba(239, 68, 68, 0.1)"
-                        : "rgba(34, 197, 94, 0.1)"
-                      : "transparent",
-                    borderLeft: hasDiff
-                      ? isPre
-                        ? "5px solid #ef4444"
-                        : "5px solid #22c55e"
-                      : "5px solid transparent",
-                    border: isSelected
-                      ? isPre
-                        ? "2px solid #ef4444"
-                        : "2px solid #22c55e"
-                      : undefined,
-                    boxShadow: isSelected
-                      ? isPre
-                        ? "0 0 18px rgba(239, 68, 68, 0.4)"
-                        : "0 0 18px rgba(34, 197, 94, 0.4)"
-                      : undefined,
-                    cursor: hasDiff ? "pointer" : "default",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {/* Prominent Visual Tag Marker with Warning Details */}
-                  {hasDiff && (
+                if (!hasDiff) {
+                  return (
+                    <div
+                      key={para.id || idx}
+                      style={{
+                        padding: "4px 8px",
+                        opacity: 0.85,
+                      }}
+                    >
+                      {para.text}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={para.id || idx}
+                    onClick={() => diff && onSelectDiff(diff.id)}
+                    style={{
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "stretch",
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      backgroundColor: isSelected
+                        ? isPre
+                          ? "rgba(239, 68, 68, 0.16)"
+                          : "rgba(34, 197, 94, 0.16)"
+                        : isPre
+                        ? "rgba(239, 68, 68, 0.05)"
+                        : "rgba(34, 197, 94, 0.05)",
+                      border: isSelected
+                        ? isPre
+                          ? "1px solid #ef4444"
+                          : "1px solid #22c55e"
+                        : "1px solid transparent",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {/* Small Tag Badge + Connected Indicator Line Marking the Changed Part */}
                     <div
                       style={{
                         display: "flex",
                         flexDirection: "column",
-                        gap: "6px",
-                        marginBottom: "10px",
-                        paddingBottom: "8px",
-                        borderBottom: isPre ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(34, 197, 94, 0.25)",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        width: "80px",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                        <Tag
-                          intent={isPre ? Intent.DANGER : Intent.SUCCESS}
-                          round
-                          style={{ fontWeight: 800, fontSize: "11px", letterSpacing: "0.04em", padding: "4px 8px" }}
-                          icon={isPre ? "warning-sign" : "tick-circle"}
-                        >
-                          {isPre ? "WARNING" : "REVISION"} [{diff.id.toUpperCase()}]: {isPre ? "ORIGINAL CLAUSE" : "REVISED CLAUSE"}
-                        </Tag>
-
-                        <Tag minimal intent={isPre ? Intent.DANGER : Intent.SUCCESS} style={{ fontSize: "10px", fontWeight: 700 }}>
-                          {diff.category} • {diff.severity} SEVERITY
-                        </Tag>
-                      </div>
-
-                      {diff.title && (
-                        <div
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 800,
-                            color: isPre ? "#f87171" : "#4ade80",
-                            fontFamily: "var(--x52-font-sans)",
-                          }}
-                        >
-                          {diff.title}
-                        </div>
-                      )}
-
-                      {diff.description && (
-                        <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", lineHeight: 1.4 }}>
-                          {diff.description}
-                        </div>
-                      )}
+                      <Tag
+                        intent={isPre ? Intent.DANGER : Intent.SUCCESS}
+                        round
+                        style={{
+                          fontSize: "9px",
+                          fontWeight: 800,
+                          padding: "2px 6px",
+                          letterSpacing: "0.03em",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        #{diffNum} {isPre ? "MODIFIED" : "REVISED"}
+                      </Tag>
+                      
+                      {/* Vertical line indicator starting from the tag down the entire changed part */}
+                      <div
+                        style={{
+                          width: "3px",
+                          flex: 1,
+                          minHeight: "20px",
+                          backgroundColor: isPre ? "#ef4444" : "#22c55e",
+                          marginTop: "6px",
+                          borderRadius: "2px",
+                          opacity: isSelected ? 1 : 0.7,
+                        }}
+                      />
                     </div>
-                  )}
 
-                  {/* Paragraph Text Content */}
-                  <div
-                    style={{
-                      color: hasDiff
-                        ? isPre
+                    {/* The Changed Text */}
+                    <div
+                      style={{
+                        flex: 1,
+                        color: isPre
                           ? isSelected
                             ? "#fca5a5"
                             : "inherit"
                           : isSelected
                           ? "#86efac"
-                          : "inherit"
-                        : "inherit",
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {para.text}
+                          : "inherit",
+                        borderBottom: isPre
+                          ? "1px dashed rgba(239, 68, 68, 0.4)"
+                          : "1px dashed rgba(34, 197, 94, 0.4)",
+                        paddingBottom: "4px",
+                      }}
+                    >
+                      {para.text}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div style={{ textAlign: "center", padding: "30px", color: "var(--x52-text-muted)" }}>
+                No differences detected on this page.
+              </div>
+            )}
           </div>
         )}
       </div>
