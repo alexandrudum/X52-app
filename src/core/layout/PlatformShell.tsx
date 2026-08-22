@@ -143,6 +143,9 @@ export const PlatformShell: React.FC = () => {
 
   const [activeAppId, setActiveAppId] = useState<string>(initialAppId);
   const [isLauncherOpen, setIsLauncherOpen] = useState(false);
+  const [activeBroadcast, setActiveBroadcast] = useState<string | null>(
+    "Scheduled Apollo Platform Upgrade to v2.4.2 will occur Sunday at 03:00 UTC (Zero Downtime)."
+  );
   const { isDarkMode, toggleTheme } = useTheme();
 
   const currentApp = registry.get(activeAppId) ?? suiteApps[0];
@@ -170,9 +173,38 @@ export const PlatformShell: React.FC = () => {
         width: "100%",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--x52-space-4)",
+        gap: "var(--x52-space-3)",
       }}
     >
+      {/* Global Administrative Broadcast Banner */}
+      {activeBroadcast && (
+        <div
+          style={{
+            backgroundColor: "rgba(59, 130, 246, 0.15)",
+            border: "1px solid rgba(59, 130, 246, 0.4)",
+            borderRadius: "6px",
+            padding: "8px 14px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Tag intent="primary" round style={{ fontWeight: 800, fontSize: "10px" }}>
+              PALANTIR BROADCAST
+            </Tag>
+            <span>{activeBroadcast}</span>
+          </div>
+          <Button
+            variant="minimal"
+            size="small"
+            icon="cross"
+            onClick={() => setActiveBroadcast(null)}
+          />
+        </div>
+      )}
+
       {/* Universal platform navigation shell */}
       <Navbar
         style={{

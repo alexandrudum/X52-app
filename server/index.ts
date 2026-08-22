@@ -6,6 +6,11 @@ import storageRouter from "./routes/storage";
 import schedulerRouter from "./routes/scheduler";
 import securityRouter from "./routes/security";
 import governanceRouter from "./routes/governance";
+import usersRouter from "./routes/users";
+import tokensRouter from "./routes/tokens";
+import connectorsRouter from "./routes/connectors";
+import functionsRouter from "./routes/functions";
+import logsRouter from "./routes/logs";
 import { getRealSystemMetrics } from "./services/systemMonitor";
 
 const app = express();
@@ -21,6 +26,11 @@ app.use("/api/storage", storageRouter);
 app.use("/api/scheduler", schedulerRouter);
 app.use("/api/security", securityRouter);
 app.use("/api/governance", governanceRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/tokens", tokensRouter);
+app.use("/api/connectors", connectorsRouter);
+app.use("/api/functions", functionsRouter);
+app.use("/api/logs", logsRouter);
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
@@ -28,7 +38,7 @@ app.get("/api/health", (_req, res) => {
   res.json({
     status: "HEALTHY",
     service: "X52 Backend Control Service",
-    version: "1.0.0",
+    version: "2.0.0",
     timestamp: new Date().toISOString(),
     uptimeSeconds: metrics.process.uptimeSeconds,
     memoryUsageMB: metrics.process.memoryUsageMB,

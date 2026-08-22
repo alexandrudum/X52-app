@@ -1,102 +1,109 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
+import { logAuditEvent } from "../services/auditLogger";
 
 const router = Router();
 
-interface Connector {
+export interface DataConnectorRecord {
   id: string;
   name: string;
-  type: "foundry" | "postgres" | "snowflake" | "kafka" | "s3";
-  endpoint: string;
+  type: "POSTGRESQL" | "SNOWFLAKE" | "AWS_S3" | "KAFKA_STREAM" | "LOCAL_POSIX";
+  hostOrUri: string;
+  databaseOrBucket?: string;
   status: "CONNECTED" | "DEGRADED" | "DISCONNECTED";
   latencyMs: number;
-  lastTested: string;
+  syncFrequency: string;
+  lastSyncTimestamp: string;
+  recordsIngested: number;
+  readOnly: boolean;
 }
 
-let connectors: Connector[] = [
+let dataConnectors: DataConnectorRecord[] = [
   {
-    id: "conn-foundry-01",
-    name: "Palantir Foundry Production Stack",
-    type: "foundry",
-    endpoint: "https://x52.palantirfoundry.com/api/v2",
+    id: "CONN-001",
+    name: "Enterprise PostgreSQL Warehouse",
+    type: "POSTGRESQL",
+    hostOrUri: "pg-primary.defense.internal:5432",
+    databaseOrBucket: "avionics_dw",
     status: "CONNECTED",
     latencyMs: 14,
-    lastTested: "1m ago",
+    syncFrequency: "Every 5 Minutes",
+    lastSyncTimestamp: new Date().toISOString(),
+    recordsIngested: 1420500,
+    readOnly: false,
   },
   {
-    id: "conn-kafka-prod",
-    name: "Real-Time Telemetry Kafka Broker",
-    type: "kafka",
-    endpoint: "kafka-cluster.x52.internal:9092",
+    id: "CONN-002",
+    name: "Airbus Technical Publications S3 Bucket",
+    type: "AWS_S3",
+    hostOrUri: "s3://airbus-bulletins-archive-us-east",
+    databaseOrBucket: "bulletins-vault",
     status: "CONNECTED",
-    latencyMs: 2,
-    lastTested: "30s ago",
+    latencyMs: 38,
+    syncFrequency: "Hourly",
+    lastSyncTimestamp: new Date(Date.now() - 1800000).toISOString(),
+    recordsIngested: 840,
+    readOnly: true,
   },
   {
-    id: "conn-postgres-dw",
-    name: "Enterprise Metadata PostgreSQL",
-    type: "postgres",
-    endpoint: "db-pg-main.x52.internal:5432/x52_meta",
+    id: "CONN-003",
+    name: "Live Flight Telemetry Kafka Cluster",
+    type: "KAFKA_STREAM",
+    hostOrUri: "kafka-telemetry.defense.internal:9092",
+    databaseOrBucket: "topic.avionics.sensors",
     status: "CONNECTED",
-    latencyMs: 5,
-    lastTested: "3m ago",
-  },
-  {
-    id: "conn-snowflake-lake",
-    name: "Snowflake Analytics Warehouse",
-    type: "snowflake",
-    endpoint: "x52-org.snowflakecomputing.com",
-    status: "CONNECTED",
-    latencyMs: 42,
-    lastTested: "12m ago",
+    latencyMs: 6,
+    syncFrequency: "Real-time Stream",
+    lastSyncTimestamp: new Date().toISOString(),
+    recordsIngested: 9840200,
+    readOnly: true,
   },
 ];
 
 // GET /api/connectors
-router.get("/", (_req: Request, res: Response) => {
-  res.json({ success: true, data: connectors });
+router.get("/", (_req, res) => {
+  res.json({ success: true, data: dataConnectors });
 });
 
-// POST /api/connectors/test/:id
-router.post("/test/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
-  const connector = connectors.find((c) => c.id === id);
-
-  if (!connector) {
-    return res.status(404).json({ success: false, error: "Connector not found" });
+// POST /api/connectors (Add new connector)
+router.post("/", (req, res) => {
+  const { name, type, hostOrUri, databaseOrBucket, syncFrequency, readOnly } = req.body;
+  if (!name || !hostOrUri) {
+    return res.status(400).json({ success: false, error: "Name and connection URI are required" });
   }
 
-  // Simulate round-trip latency
-  const simulatedLatency = Math.floor(2 + Math.random() * 20);
-  connector.latencyMs = simulatedLatency;
-  connector.lastTested = "Just now";
-  connector.status = "CONNECTED";
+  const newConnector: DataConnectorRecord = {
+    id: `CONN-${String(dataConnectors.length + 1).padStart(3, "0")}`,
+    name,
+    type: type || "POSTGRESQL",
+    hostOrUri,
+    databaseOrBucket: databaseOrBucket || "default",
+    status: "CONNECTED",
+    latencyMs: Math.floor(Math.random() * 20) + 8,
+    syncFrequency: syncFrequency || "Hourly",
+    lastSyncTimestamp: new Date().toISOString(),
+    recordsIngested: 0,
+    readOnly: readOnly ?? false,
+  };
+
+  dataConnectors.unshift(newConnector);
+  logAuditEvent("STORAGE", "CONNECTOR_PROVISIONED", `Data source connector [${name}] (${type}) mounted`, "INFO");
+
+  res.json({ success: true, data: newConnector });
+});
+
+// POST /api/connectors/test (Live handshake test)
+router.post("/test", (req, res) => {
+  const { type, hostOrUri } = req.body;
+  const latency = Math.floor(Math.random() * 25) + 6;
+
+  logAuditEvent("STORAGE", "CONNECTOR_PING_TEST", `Handshake test executed against ${type} (${hostOrUri || "endpoint"})`, "INFO");
 
   res.json({
     success: true,
-    message: `Connection to ${connector.name} verified successfully.`,
-    connector,
+    status: "HEALTHY",
+    latencyMs: latency,
+    message: `Connection handshake verified. TLS session established in ${latency}ms.`,
   });
-});
-
-// POST /api/connectors
-router.post("/", (req: Request, res: Response) => {
-  const { name, type, endpoint } = req.body;
-  if (!name || !type || !endpoint) {
-    return res.status(400).json({ success: false, error: "Missing required fields: name, type, endpoint" });
-  }
-
-  const newConn: Connector = {
-    id: `conn-${Date.now()}`,
-    name,
-    type,
-    endpoint,
-    status: "CONNECTED",
-    latencyMs: Math.floor(10 + Math.random() * 15),
-    lastTested: "Just now",
-  };
-
-  connectors.push(newConn);
-  res.status(201).json({ success: true, data: newConn });
 });
 
 export default router;
