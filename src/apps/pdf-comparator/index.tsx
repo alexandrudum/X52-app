@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Button,
+  ButtonGroup,
   Callout,
   Card,
   Classes,
@@ -18,6 +19,7 @@ import { sampleContractDiff } from "../../core/pdf/samplePdfDocuments";
 import { PDFUploadZone } from "../../core/pdf/PDFUploadZone";
 import { DualPDFViewer } from "../../core/pdf/DualPDFViewer";
 import { DiffWarningSidebar } from "../../core/pdf/DiffWarningSidebar";
+import { PDFCanvasViewer } from "../../core/pdf/PDFCanvasViewer";
 
 export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: boolean }> = ({
   isDarkMode = true,
@@ -26,6 +28,7 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(
     sampleContractDiff.diffItems[0]?.id ?? null,
   );
+  const [viewMode, setViewMode] = useState<"split" | "original-canvas" | "revised-canvas">("split");
   const [notification, setNotification] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
@@ -144,7 +147,31 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--x52-space-2)", alignItems: "center" }}>
+            {/* View Mode & Actions */}
+            <div style={{ display: "flex", gap: "var(--x52-space-2)", alignItems: "center", flexWrap: "wrap" }}>
+              <ButtonGroup variant="outlined" size="small">
+                <Button
+                  icon="comparison"
+                  text="Split Screen"
+                  active={viewMode === "split"}
+                  onClick={() => setViewMode("split")}
+                />
+                <Button
+                  icon="document"
+                  intent={Intent.DANGER}
+                  text="Original PDF (Working)"
+                  active={viewMode === "original-canvas"}
+                  onClick={() => setViewMode("original-canvas")}
+                />
+                <Button
+                  icon="document-share"
+                  intent={Intent.SUCCESS}
+                  text="Revised PDF"
+                  active={viewMode === "revised-canvas"}
+                  onClick={() => setViewMode("revised-canvas")}
+                />
+              </ButtonGroup>
+
               <Tooltip content="Discard this pair and load two new documents" placement="bottom-end">
                 <Button
                   variant="minimal"
@@ -170,7 +197,7 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
             </div>
           </Card>
 
-          {/* Viewers left, warning inspector right. */}
+          {/* Main workspace layout */}
           <div
             style={{
               display: "grid",
@@ -179,16 +206,46 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
               alignItems: "start",
             }}
           >
-            <DualPDFViewer
-              preDoc={currentProject.preDocument}
-              postDoc={currentProject.postDocument}
-              diffItems={currentProject.diffItems}
-              selectedDiffId={selectedDiffId}
-              onSelectDiff={setSelectedDiffId}
-              isDarkMode={isDarkMode}
-            />
+            {/* Center Main Viewport based on selected view mode */}
+            <div>
+              {viewMode === "split" && (
+                <DualPDFViewer
+                  preDoc={currentProject.preDocument}
+                  postDoc={currentProject.postDocument}
+                  diffItems={currentProject.diffItems}
+                  selectedDiffId={selectedDiffId}
+                  onSelectDiff={setSelectedDiffId}
+                  isDarkMode={isDarkMode}
+                />
+              )}
 
-            <div style={{ position: "sticky", top: "var(--x52-space-4)" }}>
+              {viewMode === "original-canvas" && (
+                <PDFCanvasViewer
+                  file={null}
+                  sampleName={currentProject.preDocument.fileName}
+                  diffItems={currentProject.diffItems}
+                  selectedDiffId={selectedDiffId}
+                  onSelectDiff={setSelectedDiffId}
+                  isDarkMode={isDarkMode}
+                  side="pre"
+                />
+              )}
+
+              {viewMode === "revised-canvas" && (
+                <PDFCanvasViewer
+                  file={null}
+                  sampleName={currentProject.postDocument.fileName}
+                  diffItems={currentProject.diffItems}
+                  selectedDiffId={selectedDiffId}
+                  onSelectDiff={setSelectedDiffId}
+                  isDarkMode={isDarkMode}
+                  side="post"
+                />
+              )}
+            </div>
+
+            {/* Sidebar with warnings */}
+            <div style={{ position: "sticky", top: "var(--x52-space-3)" }}>
               <DiffWarningSidebar
                 diffItems={currentProject.diffItems}
                 selectedDiffId={selectedDiffId}
