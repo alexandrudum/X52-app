@@ -1,4 +1,5 @@
 import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Intent } from "@blueprintjs/core";
 import type {
   PDFDiffProject,
@@ -10,10 +11,7 @@ import type {
 } from "./pdfDiffTypes";
 
 // Configure pdfjs worker for Vite browser bundling
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

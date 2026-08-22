@@ -221,8 +221,7 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
 
               {viewMode === "original-canvas" && (
                 <PDFCanvasViewer
-                  file={null}
-                  sampleName={currentProject.preDocument.fileName}
+                  doc={currentProject.preDocument}
                   diffItems={currentProject.diffItems}
                   selectedDiffId={selectedDiffId}
                   onSelectDiff={setSelectedDiffId}
@@ -233,8 +232,7 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
 
               {viewMode === "revised-canvas" && (
                 <PDFCanvasViewer
-                  file={null}
-                  sampleName={currentProject.postDocument.fileName}
+                  doc={currentProject.postDocument}
                   diffItems={currentProject.diffItems}
                   selectedDiffId={selectedDiffId}
                   onSelectDiff={setSelectedDiffId}
