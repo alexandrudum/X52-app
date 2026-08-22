@@ -1,0 +1,114 @@
+@import "normalize.css/normalize.css";
+@import "@blueprintjs/icons/lib/css/blueprint-icons.css";
+@import "@blueprintjs/core/lib/css/blueprint.css";
+
+:root {
+  --x52-bg: #f8fafc;
+  --x52-card-bg: #ffffff;
+  --x52-card-secondary: #f1f5f9;
+  --x52-text: #0f172a;
+  --x52-text-muted: #64748b;
+  --x52-border: #e2e8f0;
+  --x52-border-subtle: #cbd5e1;
+  --x52-accent: #000000;
+  --x52-accent-fg: #ffffff;
+  --x52-row-hover: #f8fafc;
+  --x52-node-bg: #e2e8f0;
+  --x52-glow: rgba(0, 0, 0, 0.05);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body.bp6-dark,
+.bp6-dark {
+  --x52-bg: #090d11;
+  --x52-card-bg: #11161d;
+  --x52-card-secondary: #161b22;
+  --x52-text: #f0f6fc;
+  --x52-text-muted: #8b949e;
+  --x52-border: #21262d;
+  --x52-border-subtle: #30363d;
+  --x52-accent: #ffffff;
+  --x52-accent-fg: #000000;
+  --x52-row-hover: #1c2128;
+  --x52-node-bg: #21262d;
+  --x52-glow: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: var(--x52-bg);
+  color: var(--x52-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom Interactive Polish */
+.x52-monochrome-btn {
+  background: var(--x52-accent) !important;
+  color: var(--x52-accent-fg) !important;
+  border: 1px solid var(--x52-border-subtle) !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 6px var(--x52-glow) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.x52-monochrome-btn:hover {
+  opacity: 0.9 !important;
+  transform: translateY(-1px);
+}
+
+.x52-monochrome-btn:active {
+  transform: translateY(0);
+}
+
+.x52-table-row {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.x52-table-row:hover {
+  background-color: var(--x52-row-hover) !important;
+}
+
+/* Custom Blueprint Tab Polish */
+.bp6-dark .bp6-tab {
+  color: var(--x52-text-muted);
+  font-weight: 600;
+}
+
+.bp6-dark .bp6-tab[aria-selected="true"] {
+  color: var(--x52-text);
+}
+
+/* Pulse Animation for Live Telemetry */
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse-green 2s infinite;
+}

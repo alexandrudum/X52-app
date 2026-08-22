@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="x52-grad-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#d1d5db"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge (optional) -->
+  <!-- X -->
+  <path d="M 20 20 L 55 20 L 85 60 L 115 20 L 150 20 L 105 72 L 150 120 L 115 120 L 85 82 L 55 120 L 20 120 L 65 72 Z" fill="currentColor" />
+  <!-- 5 -->
+  <path d="M 165 20 L 245 20 L 245 42 L 195 42 L 195 62 C 205 60 218 60 230 65 C 245 71 252 83 252 96 C 252 110 241 120 220 120 C 200 120 185 112 175 102 L 190 85 C 196 92 206 98 218 98 C 226 98 230 94 230 89 C 230 83 224 80 212 80 L 188 80 C 175 80 165 70 165 58 Z" fill="currentColor" />
+  <!-- 2 -->
+  <path d="M 270 42 C 270 28 285 20 308 20 C 330 20 348 30 348 46 C 348 60 338 72 322 84 L 298 100 L 350 100 L 350 120 L 270 120 L 270 102 L 310 72 C 322 63 328 54 328 46 C 328 38 320 35 308 35 C 296 35 288 40 282 46 Z" fill="currentColor" />
+</svg>
