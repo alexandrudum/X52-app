@@ -14,11 +14,24 @@ import { OntologyExplorerApp } from "../../apps/ontology-explorer";
 import { AppWorkbench } from "../../apps/app-workbench";
 import { RAGExplorerApp } from "../../apps/rag-explorer";
 import { ComparatorApp } from "../../apps/comparator";
+import { PalantirWorkshopApp } from "../../apps/workshop";
 import { BackendControlPanel } from "../../components/admin/BackendControlPanel";
 import Dashboard from "../../Dashboard";
 
 // Register all Suite Applications in the X52 Core
 const suiteApps: X52AppManifest[] = [
+  {
+    id: "workshop",
+    name: "Foundry Workshop",
+    shortName: "WS",
+    description: "Palantir Foundry interactive application runtime with reactive inter-widget variable binding and AIP.",
+    version: "1.0.0",
+    icon: "layout-auto",
+    category: "analytics",
+    intent: "primary",
+    standaloneRoute: "/?app=workshop",
+    component: PalantirWorkshopApp,
+  },
   {
     id: "workbench",
     name: "App Workbench",
