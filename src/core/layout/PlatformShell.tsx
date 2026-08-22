@@ -12,6 +12,8 @@ import { type X52AppManifest, registry } from "../registry";
 import { PipelineStudioApp } from "../../apps/pipeline-studio";
 import { OntologyExplorerApp } from "../../apps/ontology-explorer";
 import { AppWorkbench } from "../../apps/app-workbench";
+import { RAGExplorerApp } from "../../apps/rag-explorer";
+import { ComparatorApp } from "../../apps/comparator";
 import { BackendControlPanel } from "../../components/admin/BackendControlPanel";
 import Dashboard from "../../Dashboard";
 
@@ -28,6 +30,30 @@ const suiteApps: X52AppManifest[] = [
     intent: "primary",
     standaloneRoute: "/?app=workbench",
     component: AppWorkbench,
+  },
+  {
+    id: "rag-explorer",
+    name: "RAG Semantic Explorer",
+    shortName: "RAG",
+    description: "Vector similarity search, evidence chunk ranking, and grounded AI synthesis with citations.",
+    version: "1.0.0",
+    icon: "search-template",
+    category: "analytics",
+    intent: "primary",
+    standaloneRoute: "/?app=rag-explorer",
+    component: RAGExplorerApp,
+  },
+  {
+    id: "comparator",
+    name: "Entity & Model Comparator",
+    shortName: "CMP",
+    description: "Side-by-side specification diff matrix, multi-attribute sorting, and data catalog listing.",
+    version: "1.0.0",
+    icon: "comparison",
+    category: "analytics",
+    intent: "success",
+    standaloneRoute: "/?app=comparator",
+    component: ComparatorApp,
   },
   {
     id: "operations",
