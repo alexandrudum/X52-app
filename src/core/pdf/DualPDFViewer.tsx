@@ -386,66 +386,81 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
                   onClick={() => diff && onSelectDiff(diff.id)}
                   style={{
                     position: "relative",
-                    padding: hasDiff ? "12px 16px" : "4px 8px",
+                    padding: hasDiff ? "16px 20px" : "6px 10px",
                     borderRadius: "8px",
                     backgroundColor: isSelected
                       ? isPre
-                        ? "rgba(239, 68, 68, 0.18)"
-                        : "rgba(34, 197, 94, 0.18)"
+                        ? "rgba(239, 68, 68, 0.22)"
+                        : "rgba(34, 197, 94, 0.22)"
                       : hasDiff
                       ? isPre
-                        ? "rgba(239, 68, 68, 0.08)"
-                        : "rgba(34, 197, 94, 0.08)"
+                        ? "rgba(239, 68, 68, 0.1)"
+                        : "rgba(34, 197, 94, 0.1)"
                       : "transparent",
                     borderLeft: hasDiff
                       ? isPre
-                        ? "4px solid #ef4444"
-                        : "4px solid #22c55e"
-                      : "4px solid transparent",
+                        ? "5px solid #ef4444"
+                        : "5px solid #22c55e"
+                      : "5px solid transparent",
+                    border: isSelected
+                      ? isPre
+                        ? "2px solid #ef4444"
+                        : "2px solid #22c55e"
+                      : undefined,
                     boxShadow: isSelected
                       ? isPre
-                        ? "0 0 0 2px rgba(239, 68, 68, 0.45)"
-                        : "0 0 0 2px rgba(34, 197, 94, 0.45)"
+                        ? "0 0 18px rgba(239, 68, 68, 0.4)"
+                        : "0 0 18px rgba(34, 197, 94, 0.4)"
                       : undefined,
                     cursor: hasDiff ? "pointer" : "default",
                     transition: "all 0.15s ease",
                   }}
                 >
-                  {/* Visual Tag Marker directly on the Paragraph */}
+                  {/* Prominent Visual Tag Marker with Warning Details */}
                   {hasDiff && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                      <Tag
-                        intent={isPre ? Intent.DANGER : Intent.SUCCESS}
-                        round
-                        style={{ fontWeight: 800, fontSize: "10px", letterSpacing: "0.04em" }}
-                        icon={isPre ? "warning-sign" : "tick-circle"}
-                      >
-                        {isPre ? "ORIGINAL CLAUSE" : "REVISED CLAUSE"} [{diff.id.toUpperCase()}]
-                      </Tag>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        marginBottom: "10px",
+                        paddingBottom: "8px",
+                        borderBottom: isPre ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(34, 197, 94, 0.25)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                        <Tag
+                          intent={isPre ? Intent.DANGER : Intent.SUCCESS}
+                          round
+                          style={{ fontWeight: 800, fontSize: "11px", letterSpacing: "0.04em", padding: "4px 8px" }}
+                          icon={isPre ? "warning-sign" : "tick-circle"}
+                        >
+                          {isPre ? "WARNING" : "REVISION"} [{diff.id.toUpperCase()}]: {isPre ? "ORIGINAL CLAUSE" : "REVISED CLAUSE"}
+                        </Tag>
+
+                        <Tag minimal intent={isPre ? Intent.DANGER : Intent.SUCCESS} style={{ fontSize: "10px", fontWeight: 700 }}>
+                          {diff.category} • {diff.severity} SEVERITY
+                        </Tag>
+                      </div>
 
                       {diff.title && (
-                        <span
+                        <div
                           style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
+                            fontSize: "13px",
+                            fontWeight: 800,
                             color: isPre ? "#f87171" : "#4ade80",
                             fontFamily: "var(--x52-font-sans)",
                           }}
                         >
-                          • {diff.title}
-                        </span>
+                          {diff.title}
+                        </div>
                       )}
 
-                      <span
-                        style={{
-                          marginLeft: "auto",
-                          fontSize: "10px",
-                          color: "var(--x52-text-muted)",
-                          fontFamily: "var(--x52-font-mono)",
-                        }}
-                      >
-                        Paragraph {para.paragraphIndex}
-                      </span>
+                      {diff.description && (
+                        <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", lineHeight: 1.4 }}>
+                          {diff.description}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -461,6 +476,7 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
                           ? "#86efac"
                           : "inherit"
                         : "inherit",
+                      lineHeight: 1.7,
                     }}
                   >
                     {para.text}
