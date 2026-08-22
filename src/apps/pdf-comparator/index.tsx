@@ -25,6 +25,8 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
   isDarkMode = true,
 }) => {
   const [currentProject, setCurrentProject] = useState<PDFDiffProject | null>(sampleContractDiff);
+  const [uploadedFileA, setUploadedFileA] = useState<File | null>(null);
+  const [uploadedFileB, setUploadedFileB] = useState<File | null>(null);
   const [selectedDiffId, setSelectedDiffId] = useState<string | null>(
     sampleContractDiff.diffItems[0]?.id ?? null,
   );
@@ -32,8 +34,10 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
   const [notification, setNotification] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  const handleStartComparison = useCallback((project: PDFDiffProject) => {
+  const handleStartComparison = useCallback((project: PDFDiffProject, fileA?: File | null, fileB?: File | null) => {
     setCurrentProject(project);
+    setUploadedFileA(fileA || null);
+    setUploadedFileB(fileB || null);
     setSelectedDiffId(project.diffItems[0]?.id ?? null);
     setNotification(
       `Comparison initialised — ${project.diffItems.length} deltas mapped across ${project.preDocument.totalPages} pages.`,
@@ -42,6 +46,8 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
 
   const handleResetToUpload = useCallback(() => {
     setCurrentProject(null);
+    setUploadedFileA(null);
+    setUploadedFileB(null);
     setSelectedDiffId(null);
     setNotification(null);
   }, []);
@@ -215,6 +221,8 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
                   diffItems={currentProject.diffItems}
                   selectedDiffId={selectedDiffId}
                   onSelectDiff={setSelectedDiffId}
+                  fileA={uploadedFileA}
+                  fileB={uploadedFileB}
                   isDarkMode={isDarkMode}
                 />
               )}

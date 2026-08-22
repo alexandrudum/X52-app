@@ -11,6 +11,7 @@ import {
   Intent,
 } from "@blueprintjs/core";
 import type { PDFDiffItem, PDFDocumentSpec, PDFPageContent, DiffSide } from "./pdfDiffTypes";
+import { RealPDFPageView } from "./RealPDFPageView";
 import "./pdfDiff.css";
 
 interface DualPDFViewerProps {
@@ -19,6 +20,8 @@ interface DualPDFViewerProps {
   diffItems: PDFDiffItem[];
   selectedDiffId: string | null;
   onSelectDiff: (diffId: string) => void;
+  fileA?: File | null;
+  fileB?: File | null;
   isDarkMode?: boolean;
 }
 
@@ -37,10 +40,13 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
   diffItems,
   selectedDiffId,
   onSelectDiff,
+  fileA,
+  fileB,
   isDarkMode: _isDarkMode = true,
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [syncScroll, setSyncScroll] = useState<boolean>(true);
+  const [renderMode, setRenderMode] = useState<"real-pdf" | "paragraph-diff">("real-pdf");
 
   const leftPaneRef = useRef<HTMLDivElement>(null);
   const rightPaneRef = useRef<HTMLDivElement>(null);
@@ -200,7 +206,23 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-4)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
+          {/* Mode Switcher: Real PDF Canvas vs Extracted Paragraphs */}
+          <ButtonGroup variant="outlined" size="small">
+            <Button
+              icon="document"
+              text="Real PDF Canvas"
+              active={renderMode === "real-pdf"}
+              onClick={() => setRenderMode("real-pdf")}
+            />
+            <Button
+              icon="paragraph"
+              text="Paragraph Diff"
+              active={renderMode === "paragraph-diff"}
+              onClick={() => setRenderMode("paragraph-diff")}
+            />
+          </ButtonGroup>
+
           <Tooltip
             content={syncScroll ? "Scrolling is locked across both panes" : "Panes scroll independently"}
             placement="bottom"
@@ -216,11 +238,9 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
             />
           </Tooltip>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
-            <span className="x52-label" id="x52-pdf-zoom-label">
-              Zoom
-            </span>
-            <div style={{ width: "120px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+            <span className="x52-label">Zoom</span>
+            <div style={{ width: "110px" }}>
               <Slider
                 min={ZOOM_MIN}
                 max={ZOOM_MAX}
@@ -229,7 +249,6 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
                 labelRenderer={(val) => `${val}%`}
                 value={zoomLevel}
                 onChange={setZoomLevel}
-                handleHtmlProps={{ "aria-label": "Document zoom level" }}
               />
             </div>
           </div>
@@ -257,6 +276,8 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
           zoomLevel={zoomLevel}
           paneRef={leftPaneRef}
           onScroll={handleScroll}
+          file={fileA}
+          renderMode={renderMode}
         />
         <DocumentPane
           side="post"
@@ -269,6 +290,8 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
           zoomLevel={zoomLevel}
           paneRef={rightPaneRef}
           onScroll={handleScroll}
+          file={fileB}
+          renderMode={renderMode}
         />
       </div>
     </div>
@@ -286,6 +309,8 @@ interface DocumentPaneProps {
   zoomLevel: number;
   paneRef: React.RefObject<HTMLDivElement | null>;
   onScroll: (side: DiffSide) => void;
+  file?: File | null;
+  renderMode: "real-pdf" | "paragraph-diff";
 }
 
 const DocumentPane: React.FC<DocumentPaneProps> = ({
@@ -299,6 +324,8 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
   zoomLevel,
   paneRef,
   onScroll,
+  file,
+  renderMode,
 }) => {
   const isPre = side === "pre";
   const paragraphs = page?.paragraphs || [];
@@ -361,21 +388,37 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "20px 24px",
+          padding: renderMode === "real-pdf" && file ? "16px 8px" : "20px 24px",
+          backgroundColor: renderMode === "real-pdf" && file ? "#1e293b" : "inherit",
+          display: "flex",
+          justifyContent: "center",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            fontSize: `calc(13.5px * ${zoomLevel} / 100)`,
-            lineHeight: "1.65",
-            fontFamily: "Georgia, serif",
-          }}
-        >
-          {paragraphs.length > 0 ? (
-            paragraphs.map((para, idx) => {
+        {/* Real PDF Canvas Renderer when actual file is present */}
+        {renderMode === "real-pdf" && file ? (
+          <RealPDFPageView
+            file={file}
+            pageNum={page?.pageNumber || 1}
+            scale={zoomLevel / 100}
+            diffItems={diffItems}
+            selectedDiffId={selectedDiffId}
+            onSelectDiff={onSelectDiff}
+            side={side}
+          />
+        ) : (
+          /* Paragraph Diff View */
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              fontSize: `calc(13.5px * ${zoomLevel} / 100)`,
+              lineHeight: "1.65",
+              fontFamily: "Georgia, serif",
+              width: "100%",
+            }}
+          >
+            {paragraphs.map((para, idx) => {
               const diff = para.diffId ? diffItems.find((d) => d.id === para.diffId) : undefined;
               const isSelected = diff && selectedDiffId === diff.id;
               const hasDiff = !!diff;
@@ -483,57 +526,9 @@ const DocumentPane: React.FC<DocumentPaneProps> = ({
                   </div>
                 </div>
               );
-            })
-          ) : (
-            /* Fallback to lines if document only has raw lines */
-            page?.lines?.map((line) => {
-              const diff = line.diffId ? diffItems.find((d) => d.id === line.diffId) : undefined;
-              const isSelected = diff && selectedDiffId === diff.id;
-              return (
-                <div
-                  key={line.lineNumber}
-                  onClick={() => diff && onSelectDiff(diff.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "12px",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    backgroundColor: isSelected
-                      ? isPre
-                        ? "rgba(239, 68, 68, 0.2)"
-                        : "rgba(34, 197, 94, 0.2)"
-                      : diff
-                      ? isPre
-                        ? "rgba(239, 68, 68, 0.08)"
-                        : "rgba(34, 197, 94, 0.08)"
-                      : undefined,
-                    borderLeft: diff
-                      ? isPre
-                        ? "3px solid #ef4444"
-                        : "3px solid #22c55e"
-                      : "3px solid transparent",
-                    cursor: diff ? "pointer" : "default",
-                  }}
-                >
-                  <span style={{ fontSize: "11px", color: "var(--x52-text-muted)", fontFamily: "monospace", width: "24px" }}>
-                    {line.lineNumber}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    {diff && (
-                      <div style={{ marginBottom: "4px" }}>
-                        <Tag intent={isPre ? Intent.DANGER : Intent.SUCCESS} minimal round style={{ fontWeight: 800, fontSize: "9px" }}>
-                          {isPre ? "MODIFIED" : "REVISED"} [{diff.id.toUpperCase()}]
-                        </Tag>
-                      </div>
-                    )}
-                    <span>{line.text}</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     </Card>
   );

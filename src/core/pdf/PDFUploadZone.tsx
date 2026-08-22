@@ -14,7 +14,7 @@ import { parseAndDiffPDFs } from "./pdfParser";
 import "./pdfDiff.css";
 
 interface PDFUploadZoneProps {
-  onStartComparison: (project: PDFDiffProject) => void;
+  onStartComparison: (project: PDFDiffProject, fileA?: File | null, fileB?: File | null) => void;
   isDarkMode?: boolean;
 }
 
@@ -49,7 +49,7 @@ export const PDFUploadZone: React.FC<PDFUploadZoneProps> = ({
     setIsAnalyzing(true);
     setTimeout(() => {
       setIsAnalyzing(false);
-      onStartComparison(sampleContractDiff);
+      onStartComparison(sampleContractDiff, null, null);
     }, 700);
   }, [onStartComparison]);
 
@@ -62,7 +62,7 @@ export const PDFUploadZone: React.FC<PDFUploadZoneProps> = ({
       // Parse real text lines & calculate visual diff between the two uploaded PDFs
       const project = await parseAndDiffPDFs(fileA, fileB);
       setIsAnalyzing(false);
-      onStartComparison(project);
+      onStartComparison(project, fileA, fileB);
     } catch (err: unknown) {
       console.error("Error parsing uploaded PDF files:", err);
       setIsAnalyzing(false);
