@@ -143,7 +143,7 @@ export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
       </Card>
 
       {/* Dual Document Viewport */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", height: "700px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", height: "calc(100vh - 210px)", minHeight: "600px" }}>
         
         {/* Left Pane: Pre-Change Document */}
         <Card

@@ -160,11 +160,13 @@ export const PlatformShell: React.FC = () => {
         minHeight: "100vh",
         backgroundColor: "var(--x52-bg)",
         color: "var(--x52-text)",
-        padding: isStandalone ? "16px" : "20px 32px 40px 32px",
+        padding: isStandalone ? "12px 16px" : "14px 20px 24px 20px",
         transition: "background-color 0.2s ease, color 0.2s ease",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
-      <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div style={{ width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px", boxSizing: "border-box" }}>
         
         {/* Universal Platform Navigation Shell */}
         <Navbar

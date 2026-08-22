@@ -49,7 +49,8 @@ export const DiffWarningSidebar: React.FC<DiffWarningSidebarProps> = ({
         display: "flex",
         flexDirection: "column",
         gap: "12px",
-        height: "100%",
+        height: "calc(100vh - 210px)",
+        minHeight: "600px",
         boxSizing: "border-box",
       }}
     >
@@ -107,7 +108,7 @@ export const DiffWarningSidebar: React.FC<DiffWarningSidebarProps> = ({
       <Divider style={{ margin: "2px 0" }} />
 
       {/* Warnings List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", maxHeight: "680px", paddingRight: "4px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", flex: 1, paddingRight: "4px" }}>
         {filtered.map((item) => {
           const isSelected = selectedDiffId === item.id;
           return (
