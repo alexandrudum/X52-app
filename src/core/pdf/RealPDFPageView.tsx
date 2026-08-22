@@ -1,7 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Spinner, Tag, Intent } from "@blueprintjs/core";
 import type { PDFDiffItem } from "./pdfDiffTypes";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface RealPDFPageViewProps {
   file: File | null;
@@ -16,7 +19,7 @@ interface RealPDFPageViewProps {
 export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
   file,
   pageNum,
-  scale = 1.2,
+  scale = 1.1,
   diffItems,
   selectedDiffId,
   onSelectDiff,
@@ -30,7 +33,21 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
   const isPre = side === "pre";
   const pageDiffs = diffItems.filter((d) => d.pageNumber === pageNum);
 
-  // Load PDF Document when file changes
+  // Create native Blob URL as a 100% reliable fallback
+  const objectUrl = useMemo(() => {
+    if (!file) return null;
+    return URL.createObjectURL(file);
+  }, [file]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [objectUrl]);
+
+  // Load PDF Document with PDF.js
   useEffect(() => {
     let isCancelled = false;
 
@@ -45,7 +62,11 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
 
       try {
         const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          cMapUrl: "https://unpkg.com/pdfjs-dist@4.10.38/cmaps/",
+          cMapPacked: true,
+        });
         const doc = await loadingTask.promise;
 
         if (!isCancelled) {
@@ -92,7 +113,6 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        // Support high DPI displays
         const outputScale = window.devicePixelRatio || 1;
         canvas.width = Math.floor(viewport.width * outputScale);
         canvas.height = Math.floor(viewport.height * outputScale);
@@ -126,10 +146,21 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
     };
   }, [pdfDoc, pageNum, scale]);
 
-  if (renderError) {
+  // If PDF.js fails, fallback to native embedded PDF viewer
+  if (renderError && objectUrl) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", color: "#ef4444" }}>
-        Failed to render PDF: {renderError}
+      <div style={{ width: "100%", height: "100%", minHeight: "560px" }}>
+        <iframe
+          src={`${objectUrl}#page=${pageNum}&zoom=${Math.round(scale * 100)}`}
+          title={file?.name || "PDF Viewer"}
+          style={{
+            width: "100%",
+            height: "100%",
+            minHeight: "560px",
+            border: "none",
+            borderRadius: "4px",
+          }}
+        />
       </div>
     );
   }
@@ -167,7 +198,7 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
         </div>
       )}
 
-      {/* Actual PDF Canvas */}
+      {/* Actual High-Fidelity PDF Canvas */}
       <canvas
         ref={canvasRef}
         style={{
@@ -223,7 +254,12 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
                   <Tag
                     intent={isPre ? Intent.DANGER : Intent.SUCCESS}
                     round
-                    style={{ fontWeight: 800, fontSize: "10px", backgroundColor: "#ffffff", color: isPre ? "#ef4444" : "#16a34a" }}
+                    style={{
+                      fontWeight: 800,
+                      fontSize: "10px",
+                      backgroundColor: "#ffffff",
+                      color: isPre ? "#ef4444" : "#16a34a",
+                    }}
                   >
                     {isPre ? "WARNING" : "REVISED"} [{diff.id.toUpperCase()}]
                   </Tag>
