@@ -11,11 +11,24 @@ import { AppLauncher } from "../components/AppLauncher";
 import { type X52AppManifest, registry } from "../registry";
 import { PipelineStudioApp } from "../../apps/pipeline-studio";
 import { OntologyExplorerApp } from "../../apps/ontology-explorer";
+import { AppWorkbench } from "../../apps/app-workbench";
 import { BackendControlPanel } from "../../components/admin/BackendControlPanel";
 import Dashboard from "../../Dashboard";
 
 // Register all Suite Applications in the X52 Core
 const suiteApps: X52AppManifest[] = [
+  {
+    id: "workbench",
+    name: "App Workbench",
+    shortName: "WB",
+    description: "Visual application composer and low-code builder using X52 Core UI widgets.",
+    version: "1.0.0",
+    icon: "build",
+    category: "engineering",
+    intent: "primary",
+    standaloneRoute: "/?app=workbench",
+    component: AppWorkbench,
+  },
   {
     id: "operations",
     name: "Operations Console",
