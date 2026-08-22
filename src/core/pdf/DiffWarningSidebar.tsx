@@ -1,14 +1,18 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Card,
-  Elevation,
-  Tag,
-  Intent,
-  InputGroup,
-  Button,
   Divider,
+  Elevation,
+  InputGroup,
+  Intent,
+  NonIdealState,
+  NonIdealStateIconSize,
+  SegmentedControl,
+  Tag,
 } from "@blueprintjs/core";
-import type { PDFDiffItem } from "./pdfDiffTypes";
+import type { DiffSeverity, PDFDiffItem } from "./pdfDiffTypes";
+import { severityIntent } from "./pdfDiffTypes";
+import "./pdfDiff.css";
 
 interface DiffWarningSidebarProps {
   diffItems: PDFDiffItem[];
@@ -17,171 +21,198 @@ interface DiffWarningSidebarProps {
   isDarkMode?: boolean;
 }
 
+type SeverityFilter = "all" | DiffSeverity;
+
+const SNIPPET_LENGTH = 72;
+
+function truncate(text: string): string {
+  return text.length > SNIPPET_LENGTH ? `${text.slice(0, SNIPPET_LENGTH)}…` : text;
+}
+
 export const DiffWarningSidebar: React.FC<DiffWarningSidebarProps> = ({
   diffItems,
   selectedDiffId,
   onSelectDiff,
   isDarkMode: _isDarkMode = true,
 }) => {
-  const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [filterSeverity, setFilterSeverity] = useState<SeverityFilter>("all");
   const [search, setSearch] = useState("");
 
-  const filtered = diffItems.filter((item) => {
-    const matchesSearch =
-      item.title.toLowerCase().includes(search.toLowerCase()) ||
-      item.section.toLowerCase().includes(search.toLowerCase()) ||
-      item.category.toLowerCase().includes(search.toLowerCase());
-    const matchesSev = filterSeverity === "all" || item.severity === filterSeverity;
-    return matchesSearch && matchesSev;
-  });
+  const highCount = useMemo(
+    () => diffItems.filter((i) => i.severity === "HIGH").length,
+    [diffItems],
+  );
+  const medCount = useMemo(
+    () => diffItems.filter((i) => i.severity === "MEDIUM").length,
+    [diffItems],
+  );
 
-  const highCount = diffItems.filter((i) => i.severity === "HIGH").length;
-  const medCount = diffItems.filter((i) => i.severity === "MEDIUM").length;
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return diffItems.filter((item) => {
+      const matchesSearch =
+        needle === "" ||
+        item.title.toLowerCase().includes(needle) ||
+        item.section.toLowerCase().includes(needle) ||
+        item.category.toLowerCase().includes(needle);
+      const matchesSeverity = filterSeverity === "all" || item.severity === filterSeverity;
+      return matchesSearch && matchesSeverity;
+    });
+  }, [diffItems, filterSeverity, search]);
 
   return (
     <Card
-      elevation={Elevation.ONE}
+      elevation={Elevation.ZERO}
       style={{
         backgroundColor: "var(--x52-card-bg)",
         border: "1px solid var(--x52-border-subtle)",
-        borderRadius: "10px",
-        padding: "16px",
+        borderRadius: "var(--x52-radius)",
+        boxShadow: "none",
+        padding: "var(--x52-space-3)",
         display: "flex",
         flexDirection: "column",
-        gap: "12px",
-        height: "calc(100vh - 210px)",
-        minHeight: "600px",
+        gap: "var(--x52-space-3)",
+        height: "calc(100vh - 220px)",
+        minHeight: "560px",
         boxSizing: "border-box",
       }}
     >
-      {/* Sidebar Header */}
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-          <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 800 }}>
-            Detected Differences ({diffItems.length})
-          </h3>
-          <Tag minimal round intent={highCount > 0 ? Intent.DANGER : Intent.PRIMARY} style={{ fontWeight: 700 }}>
-            {highCount} HIGH RISK
-          </Tag>
+      <header style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-1)" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: "var(--x52-space-2)",
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "var(--x52-fs-h6)",
+              fontWeight: "var(--x52-fw-bold)",
+              color: "var(--x52-heading)",
+            }}
+          >
+            Detected differences
+          </h2>
+          <span className="x52-numeric x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+            {filtered.length} / {diffItems.length}
+          </span>
         </div>
-        <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-          Click any warning to focus and highlight the line callout in both viewers.
+        <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+          Select a finding to focus its line callout in both panes.
         </span>
-      </div>
+      </header>
 
-      {/* Filter Tabs */}
-      <div style={{ display: "flex", gap: "6px" }}>
-        <Button
-          small
-          minimal
-          text="All"
-          active={filterSeverity === "all"}
-          onClick={() => setFilterSeverity("all")}
-        />
-        <Button
-          small
-          minimal
-          intent="danger"
-          text={`High (${highCount})`}
-          active={filterSeverity === "HIGH"}
-          onClick={() => setFilterSeverity("HIGH")}
-        />
-        <Button
-          small
-          minimal
-          intent="warning"
-          text={`Medium (${medCount})`}
-          active={filterSeverity === "MEDIUM"}
-          onClick={() => setFilterSeverity("MEDIUM")}
-        />
-      </div>
-
-      <InputGroup
-        leftIcon="search"
-        placeholder="Filter warnings..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        small
-        round
+      <SegmentedControl
+        size="small"
+        fill
+        aria-label="Filter findings by severity"
+        options={[
+          { label: `All ${diffItems.length}`, value: "all" },
+          { label: `High ${highCount}`, value: "HIGH" },
+          { label: `Medium ${medCount}`, value: "MEDIUM" },
+        ]}
+        value={filterSeverity}
+        onValueChange={(value) => setFilterSeverity(value as SeverityFilter)}
       />
 
-      <Divider style={{ margin: "2px 0" }} />
+      <InputGroup
+        size="small"
+        leftIcon="search"
+        placeholder="Filter findings…"
+        aria-label="Filter findings by text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
 
-      {/* Warnings List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", flex: 1, paddingRight: "4px" }}>
-        {filtered.map((item) => {
-          const isSelected = selectedDiffId === item.id;
-          return (
-            <div
-              key={item.id}
-              onClick={() => onSelectDiff(item.id)}
-              style={{
-                padding: "12px 14px",
-                borderRadius: "8px",
-                backgroundColor: isSelected
-                  ? "rgba(56, 139, 253, 0.12)"
-                  : "var(--x52-card-secondary)",
-                border: isSelected
-                  ? "2px solid #388bfd"
-                  : "1px solid var(--x52-border)",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Tag
-                    intent={item.severity === "HIGH" ? Intent.DANGER : Intent.WARNING}
-                    round
-                    minimal
-                    style={{ fontWeight: 800, fontSize: "9px" }}
-                  >
-                    {item.severity}
-                  </Tag>
-                  <Tag minimal style={{ fontSize: "9px" }}>{item.category}</Tag>
-                </div>
-                <span style={{ fontSize: "10px", color: "var(--x52-text-muted)", fontFamily: "var(--font-mono)" }}>
-                  Pg {item.pageNumber} : L{item.lineNumber}
-                </span>
-              </div>
+      <Divider style={{ margin: 0 }} />
 
-              <div style={{ fontWeight: 700, fontSize: "13px", lineHeight: 1.3 }}>
-                {item.title}
-              </div>
-
-              <p style={{ margin: 0, fontSize: "11px", color: "var(--x52-text-muted)", lineHeight: 1.4 }}>
-                {item.description}
-              </p>
-
-              {/* Pre vs Post Mini Diff Snippet */}
-              {isSelected && (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--x52-space-2)",
+          overflowY: "auto",
+          flex: 1,
+          minHeight: 0,
+          paddingRight: "var(--x52-space-1)",
+        }}
+      >
+        {filtered.length === 0 ? (
+          <NonIdealState
+            icon="search"
+            iconSize={NonIdealStateIconSize.EXTRA_SMALL}
+            title="No matching findings"
+            description={
+              diffItems.length === 0
+                ? "This document pair produced no differences."
+                : "No finding matches the current severity filter and search."
+            }
+          />
+        ) : (
+          filtered.map((item) => {
+            const isSelected = selectedDiffId === item.id;
+            const intent = severityIntent(item.severity);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`x52-pdf-warning x52-pdf-warning--${intent === Intent.DANGER ? "danger" : "warning"}`}
+                aria-current={isSelected ? "true" : undefined}
+                onClick={() => onSelectDiff(item.id)}
+              >
                 <div
                   style={{
-                    marginTop: "6px",
-                    padding: "8px 10px",
-                    borderRadius: "6px",
-                    backgroundColor: "rgba(0, 0, 0, 0.2)",
-                    fontSize: "11px",
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    fontFamily: "var(--font-mono)",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "var(--x52-space-2)",
                   }}
                 >
-                  <div style={{ color: "#f87171" }}>
-                    - PRE: "{item.preText.substring(0, 70)}..."
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-1)" }}>
+                    <Tag minimal intent={intent} icon={intent === Intent.DANGER ? "error" : "warning-sign"}>
+                      {item.severity}
+                    </Tag>
+                    <Tag minimal>{item.category.replace("_", " ")}</Tag>
                   </div>
-                  <div style={{ color: "#4ade80" }}>
-                    + POST: "{item.postText.substring(0, 70)}..."
-                  </div>
+                  <span className="x52-numeric x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                    p{item.pageNumber}:{item.lineNumber}
+                  </span>
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                <span
+                  style={{
+                    fontSize: "var(--x52-fs-base)",
+                    fontWeight: "var(--x52-fw-medium)",
+                    color: "var(--x52-heading)",
+                  }}
+                >
+                  {item.title}
+                </span>
+
+                <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                  {item.section}
+                </span>
+
+                {isSelected && (
+                  <>
+                    <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                      {item.description}
+                    </span>
+                    {/* Marker glyphs carry the direction, so the snippet still
+                        reads in greyscale or with colour vision deficiency. */}
+                    <div className="x52-pdf-snippet">
+                      <span className="x52-pdf-snippet__pre">- {truncate(item.preText)}</span>
+                      <span className="x52-pdf-snippet__post">+ {truncate(item.postText)}</span>
+                    </div>
+                  </>
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
     </Card>
   );

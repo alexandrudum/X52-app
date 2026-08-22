@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Card,
-  Elevation,
   Button,
-  Tag,
-  Intent,
   Callout,
+  Elevation,
+  HTMLTable,
+  Intent,
+  NonIdealState,
+  Section,
+  SectionCard,
 } from "@blueprintjs/core";
+import { StatusIndicator, type StatusTone } from "./StatusIndicator";
 
 interface ScheduledJob {
   id: string;
@@ -18,9 +21,26 @@ interface ScheduledJob {
   lastDurationMs: number;
 }
 
+interface StatusBanner {
+  intent: Intent;
+  message: string;
+}
+
 interface JobSchedulerProps {
   isDarkMode: boolean;
 }
+
+const STATUS_PRESENTATION: Record<
+  ScheduledJob["status"],
+  { tone: StatusTone; label: string; live: boolean }
+> = {
+  ACTIVE: { tone: "success", label: "Active", live: false },
+  RUNNING: { tone: "warning", label: "Running", live: true },
+  PAUSED: { tone: "neutral", label: "Paused", live: false },
+};
+
+const describeError = (error: unknown): string =>
+  error instanceof Error ? error.message : "The scheduler API could not be reached.";
 
 export const JobScheduler: React.FC<JobSchedulerProps> = ({ isDarkMode: _isDarkMode }) => {
   const [jobs, setJobs] = useState<ScheduledJob[]>([
@@ -63,116 +83,153 @@ export const JobScheduler: React.FC<JobSchedulerProps> = ({ isDarkMode: _isDarkM
   ]);
 
   const [runningId, setRunningId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [banner, setBanner] = useState<StatusBanner | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleRunJob = async (id: string) => {
-    setRunningId(id);
-    setNotification(null);
+  // The "Running…" affordance is held briefly after the request settles; make
+  // sure that timer cannot fire against an unmounted component.
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    },
+    [],
+  );
+
+  const handleRunJob = async (job: ScheduledJob) => {
+    setRunningId(job.id);
+    setBanner(null);
     try {
-      await fetch(`/api/scheduler/jobs/${id}/run`, { method: "POST" });
+      const res = await fetch(`/api/scheduler/jobs/${encodeURIComponent(job.id)}/run`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`Scheduler API responded ${res.status} ${res.statusText}`.trim());
+      }
+      const data = await res.json();
       setJobs((prev) =>
-        prev.map((j) =>
-          j.id === id ? { ...j, lastRun: "Just now", status: "ACTIVE" } : j
-        )
+        prev.map((j) => (j.id === job.id ? { ...j, lastRun: "Just now", status: "ACTIVE" } : j)),
       );
-      setNotification(`Job ${id} executed successfully.`);
-    } catch {
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === id ? { ...j, lastRun: "Just now" } : j
-        )
-      );
-      setNotification(`Job triggered.`);
+      setBanner({
+        intent: Intent.SUCCESS,
+        message:
+          typeof data?.message === "string" ? data.message : `${job.name} execution triggered.`,
+      });
+    } catch (error) {
+      // Leave the job row untouched — an unreachable scheduler did not run it.
+      setBanner({
+        intent: Intent.DANGER,
+        message: `${job.name} could not be triggered — ${describeError(error)}`,
+      });
     } finally {
-      setTimeout(() => setRunningId(null), 1000);
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
+        setRunningId(null);
+      }, 1000);
     }
   };
 
   const handleToggleJob = (id: string) => {
     setJobs((prev) =>
       prev.map((j) =>
-        j.id === id
-          ? { ...j, status: j.status === "ACTIVE" ? "PAUSED" : "ACTIVE" }
-          : j
-      )
+        j.id === id ? { ...j, status: j.status === "ACTIVE" ? "PAUSED" : "ACTIVE" } : j,
+      ),
     );
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {notification && (
-        <Callout intent={Intent.SUCCESS} icon="tick-circle">
-          {notification}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-4)" }}>
+      {banner && (
+        <Callout
+          intent={banner.intent}
+          icon={banner.intent === Intent.DANGER ? "error" : "tick-circle"}
+          compact
+        >
+          {banner.message}
         </Callout>
       )}
 
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Automated Cron Jobs & Workflows</h3>
-          <span style={{ fontSize: "12px", color: "var(--x52-text-muted)" }}>
-            Background sync jobs, snapshot triggers, and partition compaction schedules.
-          </span>
-        </div>
-      </div>
-
-      {/* Jobs List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {jobs.map((job) => (
-          <Card
-            key={job.id}
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border-subtle)",
-              borderRadius: "10px",
-              padding: "16px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "16px",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}>
-                {job.name}
-              </div>
-              <div style={{ display: "flex", gap: "12px", fontSize: "12px", alignItems: "center" }}>
-                <code>{job.schedule}</code>
-                <span style={{ color: "var(--x52-text-muted)" }}>Target: <strong>{job.target}</strong></span>
-                <span style={{ color: "var(--x52-text-muted)" }}>• Last Run: {job.lastRun} ({job.lastDurationMs}ms)</span>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <Tag
-                intent={job.status === "ACTIVE" ? Intent.SUCCESS : Intent.NONE}
-                round
-                minimal
-                style={{ fontWeight: 700 }}
-              >
-                {job.status}
-              </Tag>
-
-              <Button
-                icon="play"
-                intent="primary"
-                text={runningId === job.id ? "Running..." : "Run Now"}
-                loading={runningId === job.id}
-                onClick={() => handleRunJob(job.id)}
-              />
-
-              <Button
-                minimal
-                icon={job.status === "ACTIVE" ? "pause" : "play"}
-                text={job.status === "ACTIVE" ? "Pause" : "Resume"}
-                onClick={() => handleToggleJob(job.id)}
-              />
-            </div>
-          </Card>
-        ))}
-      </div>
+      <Section
+        compact
+        elevation={Elevation.ZERO}
+        title="Automated cron jobs & workflows"
+        subtitle="Background sync jobs, snapshot triggers, and partition compaction schedules."
+      >
+        <SectionCard padded={false}>
+          {jobs.length === 0 ? (
+            <NonIdealState
+              icon="time"
+              title="No scheduled jobs"
+              description="Nothing is registered on the control-plane scheduler."
+              layout="horizontal"
+            />
+          ) : (
+            <HTMLTable compact style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th scope="col">Job</th>
+                  <th scope="col">Schedule</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Last run</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Duration
+                  </th>
+                  <th scope="col">Status</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const presentation = STATUS_PRESENTATION[job.status];
+                  return (
+                    <tr key={job.id} className="x52-table-row">
+                      <td style={{ fontWeight: "var(--x52-fw-medium)" }}>{job.name}</td>
+                      <td className="x52-numeric">{job.schedule}</td>
+                      <td className="x52-numeric x52-muted">{job.target}</td>
+                      <td className="x52-muted">{job.lastRun}</td>
+                      <td className="x52-numeric" style={{ textAlign: "right" }}>
+                        {job.lastDurationMs.toLocaleString()} ms
+                      </td>
+                      <td>
+                        <StatusIndicator
+                          tone={presentation.tone}
+                          label={presentation.label}
+                          live={presentation.live}
+                        />
+                      </td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <Button
+                          variant="minimal"
+                          size="small"
+                          icon="play"
+                          text="Run now"
+                          aria-label={`Run ${job.name} now`}
+                          loading={runningId === job.id}
+                          onClick={() => void handleRunJob(job)}
+                        />
+                        <Button
+                          variant="minimal"
+                          size="small"
+                          icon={job.status === "ACTIVE" ? "pause" : "play"}
+                          text={job.status === "ACTIVE" ? "Pause" : "Resume"}
+                          aria-label={
+                            job.status === "ACTIVE"
+                              ? `Pause schedule for ${job.name}`
+                              : `Resume schedule for ${job.name}`
+                          }
+                          onClick={() => handleToggleJob(job.id)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </HTMLTable>
+          )}
+        </SectionCard>
+      </Section>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, Elevation, Tag, Intent } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
 import { Sparkline } from "../../../components/Sparkline";
 
 interface MetricStatWidgetProps {
@@ -12,47 +13,118 @@ interface MetricStatWidgetProps {
   subtitle?: string;
 }
 
+/**
+ * Shared widget frame: flat 1px hairline + a background step, never a drop
+ * shadow. Widgets sit inside a composed layout, so elevation is reserved for
+ * genuine overlays (dialogs, popovers).
+ */
+const FRAME: React.CSSProperties = {
+  backgroundColor: "var(--x52-card-bg)",
+  border: "1px solid var(--x52-border-subtle)",
+  borderRadius: "var(--x52-radius)",
+  boxShadow: "none",
+};
+
+/**
+ * A delta must never be readable by colour alone. Any leading arrow / sign in
+ * the caller's string is promoted to an icon; otherwise the intent supplies a
+ * status glyph. The numeric sign always survives in the text.
+ */
+const DIRECTION_ICON: Record<"up" | "down", IconName> = {
+  up: "arrow-up",
+  down: "arrow-down",
+};
+
+const INTENT_ICON: Partial<Record<Intent, IconName>> = {
+  [Intent.SUCCESS]: "tick-circle",
+  [Intent.WARNING]: "warning-sign",
+  [Intent.DANGER]: "error",
+  [Intent.PRIMARY]: "info-sign",
+};
+
+function describeDelta(delta: string, intent: Intent) {
+  const trimmed = delta.trim();
+  const direction = /^[↑+]/.test(trimmed)
+    ? "up"
+    : /^[↓−-]/.test(trimmed)
+      ? "down"
+      : null;
+  const text = direction
+    ? trimmed.replace(/^[↑↓]\s*/, "")
+    : trimmed;
+  return {
+    text,
+    icon: direction ? DIRECTION_ICON[direction] : INTENT_ICON[intent],
+  };
+}
+
 export const MetricStatWidget: React.FC<MetricStatWidgetProps> = ({
   title,
   value,
   delta,
   intent = Intent.SUCCESS,
   sparklineData = [20, 35, 30, 48, 52, 60, 58, 75, 88],
-  sparklineColor = "#22c55e",
+  // Series colours come from the chart-only viz ramp, never from an Intent.
+  sparklineColor = "var(--x52-viz-cerulean)",
   subtitle,
 }) => {
+  const deltaParts = delta ? describeDelta(delta, intent) : null;
+
   return (
     <Card
-      elevation={Elevation.ONE}
+      elevation={Elevation.ZERO}
       style={{
-        backgroundColor: "var(--x52-card-bg)",
-        border: "1px solid var(--x52-border)",
-        borderRadius: "10px",
-        padding: "18px 20px",
+        ...FRAME,
+        padding: "var(--x52-space-4)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-end",
+        gap: "var(--x52-space-3)",
       }}
     >
-      <div>
-        <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "var(--x52-text-muted)", marginBottom: "4px" }}>
-          {title.toUpperCase()}
-        </div>
-        <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--font-mono)", letterSpacing: "-0.03em", marginBottom: "4px" }}>
+      <div
+        style={{
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "var(--x52-space-1)",
+        }}
+      >
+        <span className="x52-label">{title}</span>
+        <span
+          className="x52-numeric"
+          style={{
+            fontSize: "var(--x52-fs-h3)",
+            fontWeight: "var(--x52-fw-bold)",
+            color: "var(--x52-heading)",
+            lineHeight: 1.1,
+          }}
+        >
           {value}
-        </div>
-        {delta && (
-          <Tag minimal round intent={intent} style={{ fontWeight: 700, fontSize: "11px" }}>
-            {delta}
+        </span>
+        {deltaParts && (
+          <Tag minimal intent={intent} icon={deltaParts.icon}>
+            {deltaParts.text}
           </Tag>
         )}
         {subtitle && (
-          <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", marginTop: "4px" }}>
+          <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
             {subtitle}
-          </div>
+          </span>
         )}
       </div>
-      <Sparkline data={sparklineData} color={sparklineColor} width={110} height={42} />
+
+      {/* Decorative trend only — the value and delta carry the meaning. */}
+      <div aria-hidden="true" style={{ flex: "none" }}>
+        <Sparkline
+          data={sparklineData}
+          color={sparklineColor}
+          width={104}
+          height={32}
+          fill={false}
+        />
+      </div>
     </Card>
   );
 };

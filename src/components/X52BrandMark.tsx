@@ -5,69 +5,67 @@ interface X52BrandMarkProps {
   isDarkMode?: boolean;
 }
 
+/**
+ * Plate + wordmark lockup, used where the product needs to name itself
+ * (dashboard masthead) rather than just sit in the navbar.
+ *
+ * The plate polarity follows `isDarkMode` exactly as before — light plate on a
+ * dark UI, dark plate on a light one — but every value now comes from the token
+ * layer, so the lockup is flat (a brand mark is not an overlay: no drop shadow)
+ * and lightly rounded rather than a 10px pill-ish badge.
+ */
 export const X52BrandMark: React.FC<X52BrandMarkProps> = ({
   size = 56,
   isDarkMode = true,
 }) => {
-  const textColor = isDarkMode ? "#ffffff" : "#0f172a";
-
   return (
     <div
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: "12px",
+        gap: "var(--x52-space-3)",
         userSelect: "none",
       }}
     >
-      {/* Simple, sleek minimalist X52 icon badge */}
-      <div
+      <span
+        role="img"
+        aria-label="X52"
         style={{
           width: size,
           height: size,
-          borderRadius: "10px",
-          backgroundColor: isDarkMode ? "#ffffff" : "#0f172a",
-          color: isDarkMode ? "#090d11" : "#ffffff",
-          display: "flex",
+          flexShrink: 0,
+          display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          fontWeight: 900,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          fontSize: Math.round(size * 0.42),
-          letterSpacing: "-0.04em",
-          flexShrink: 0,
-          boxShadow: isDarkMode
-            ? "0 4px 12px rgba(255, 255, 255, 0.15)"
-            : "0 4px 12px rgba(0, 0, 0, 0.15)",
+          borderRadius: "var(--x52-radius)",
+          backgroundColor: isDarkMode ? "var(--x52-white)" : "var(--x52-black)",
+          color: isDarkMode ? "var(--x52-black)" : "var(--x52-white)",
+          fontFamily: "var(--x52-font-ui)",
+          fontWeight: "var(--x52-fw-bold)",
+          fontSize: Math.round(size * 0.4),
+          letterSpacing: "0.01em",
+          lineHeight: 1,
         }}
       >
         X52
-      </div>
+      </span>
 
-      {/* Clean companion wordmark */}
-      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+      <span style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-1)" }}>
         <span
           style={{
-            fontSize: Math.round(size * 0.42),
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            color: textColor,
+            fontSize: Math.round(size * 0.4),
+            fontWeight: "var(--x52-fw-bold)",
+            letterSpacing: "0.01em",
+            lineHeight: 1,
+            color: "var(--x52-heading)",
           }}
         >
           X52
         </span>
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 600,
-            letterSpacing: "0.1em",
-            color: isDarkMode ? "#9ca3af" : "#64748b",
-            marginTop: "4px",
-          }}
-        >
-          ENTERPRISE
+        <span className="x52-label" style={{ lineHeight: 1 }}>
+          Enterprise
         </span>
-      </div>
+      </span>
     </div>
   );
 };

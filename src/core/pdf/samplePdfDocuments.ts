@@ -1,6 +1,12 @@
-import { Intent } from "@blueprintjs/core";
 import type { PDFDiffProject } from "./pdfDiffTypes";
+import { severityIntent } from "./pdfDiffTypes";
 
+/**
+ * Demo corpus for the PDF Diff Auditor: one enterprise MSA in two revisions.
+ * `intent` is derived from `severity` rather than hand-written so the sidebar
+ * tags, the line callouts, and the audit summary can never disagree about how
+ * serious a finding is.
+ */
 export const sampleContractDiff: PDFDiffProject = {
   title: "X52 Enterprise Master Service Agreement (MSA)",
   diffItems: [
@@ -11,7 +17,7 @@ export const sampleContractDiff: PDFDiffProject = {
       section: "Section 2.1: Annual License Fees",
       category: "FINANCIAL",
       severity: "HIGH",
-      intent: Intent.DANGER,
+      intent: severityIntent("HIGH"),
       title: "Subscription Pricing Increased by $25,000 / yr",
       description: "Base recurring licensing fee was increased from $120,000/yr to $145,000/yr with an automatic 5% annual escalator.",
       preText: "Annual subscription license fee shall be fixed at $120,000 USD payable quarterly in advance without automatic escalator.",
@@ -25,7 +31,7 @@ export const sampleContractDiff: PDFDiffProject = {
       section: "Section 4.3: Service Level Agreement (SLA)",
       category: "SLA_CLAUSE",
       severity: "HIGH",
-      intent: Intent.DANGER,
+      intent: severityIntent("HIGH"),
       title: "SLA Uptime Guarantee Lowered to 99.5%",
       description: "Service commitment reduced from 99.99% high availability down to 99.5%, excluding scheduled maintenance windows.",
       preText: "Provider guarantees a 99.99% monthly system uptime SLA, backed by 15% service fee credits for non-compliance.",
@@ -39,7 +45,7 @@ export const sampleContractDiff: PDFDiffProject = {
       section: "Section 6.2: Data Ingestion & Bandwidth Cap",
       category: "METRIC",
       severity: "MEDIUM",
-      intent: Intent.PRIMARY,
+      intent: severityIntent("MEDIUM"),
       title: "Throughput Quota Raised to 250 GB/s",
       description: "Monthly cluster bandwidth quota increased to accommodate expanded Foundry pipeline ingestion.",
       preText: "Telemetry ingestion bandwidth quota is capped at 100 GB/s aggregate throughput across all active partitions.",
@@ -53,7 +59,7 @@ export const sampleContractDiff: PDFDiffProject = {
       section: "Section 8.4: Limitation of Liability",
       category: "LEGAL_RISK",
       severity: "HIGH",
-      intent: Intent.DANGER,
+      intent: severityIntent("HIGH"),
       title: "Liability Cap Reduced from 3x to 1x Annual Fees",
       description: "Maximum aggregate indemnification liability ceiling significantly lowered from 300% down to 100% of fees paid.",
       preText: "In no event shall either party's aggregate liability exceed three times (3x) the total fees paid in the preceding 12 months.",
@@ -67,7 +73,7 @@ export const sampleContractDiff: PDFDiffProject = {
       section: "Section 11.1: Termination for Convenience",
       category: "DATE_TERMS",
       severity: "MEDIUM",
-      intent: Intent.WARNING,
+      intent: severityIntent("MEDIUM"),
       title: "Notice Window Extended from 30 to 90 Days",
       description: "Termination notice period tripled, requiring at least 90 calendar days prior written notice.",
       preText: "Either party may terminate this agreement without cause upon thirty (30) days prior written notice.",

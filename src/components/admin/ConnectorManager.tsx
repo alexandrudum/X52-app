@@ -1,17 +1,21 @@
 import React, { useState } from "react";
 import {
-  Card,
-  Elevation,
   Button,
-  Tag,
-  Intent,
   Callout,
-  Dialog,
-  FormGroup,
-  InputGroup,
-  HTMLSelect,
   Classes,
+  Dialog,
+  Elevation,
+  FormGroup,
+  HTMLSelect,
+  HTMLTable,
+  InputGroup,
+  Intent,
+  NonIdealState,
+  Section,
+  SectionCard,
+  Tag,
 } from "@blueprintjs/core";
+import { StatusIndicator, type StatusTone } from "./StatusIndicator";
 
 interface Connector {
   id: string;
@@ -23,9 +27,23 @@ interface Connector {
   lastTested: string;
 }
 
+interface StatusBanner {
+  intent: Intent;
+  message: string;
+}
+
 interface ConnectorManagerProps {
   isDarkMode: boolean;
 }
+
+const STATUS_PRESENTATION: Record<Connector["status"], { tone: StatusTone; label: string }> = {
+  CONNECTED: { tone: "success", label: "Connected" },
+  DEGRADED: { tone: "warning", label: "Degraded" },
+  DISCONNECTED: { tone: "danger", label: "Disconnected" },
+};
+
+const describeError = (error: unknown): string =>
+  error instanceof Error ? error.message : "The connector API could not be reached.";
 
 export const ConnectorManager: React.FC<ConnectorManagerProps> = ({ isDarkMode }) => {
   const [connectors, setConnectors] = useState<Connector[]>([
@@ -72,170 +90,199 @@ export const ConnectorManager: React.FC<ConnectorManagerProps> = ({ isDarkMode }
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<Connector["type"]>("foundry");
   const [newEndpoint, setNewEndpoint] = useState("");
-  const [notification, setNotification] = useState<string | null>(null);
+  const [showAddErrors, setShowAddErrors] = useState(false);
+  const [banner, setBanner] = useState<StatusBanner | null>(null);
 
-  const handleTestConnection = async (id: string) => {
-    setTestingId(id);
-    setNotification(null);
+  const handleTestConnection = async (connector: Connector) => {
+    setTestingId(connector.id);
+    setBanner(null);
     try {
-      const res = await fetch(`/api/connectors/test/${id}`, { method: "POST" });
-      const data = await res.json();
-      if (data.connector) {
-        setConnectors((prev) =>
-          prev.map((c) => (c.id === id ? data.connector : c))
-        );
+      const res = await fetch(`/api/connectors/test/${encodeURIComponent(connector.id)}`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`Connector API responded ${res.status} ${res.statusText}`.trim());
       }
-      setNotification(`Connection to ${data.connector?.name || id} tested: Round-trip latency is ${data.connector?.latencyMs || 8}ms.`);
-    } catch {
+      const data = await res.json();
+      if (data?.connector) {
+        setConnectors((prev) => prev.map((c) => (c.id === connector.id ? data.connector : c)));
+      }
+      setBanner({
+        intent: Intent.SUCCESS,
+        message: `${connector.name} responded in ${data?.connector?.latencyMs ?? "—"} ms.`,
+      });
+    } catch (error) {
+      // Mark the connector as unreachable rather than inventing a latency figure.
       setConnectors((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? { ...c, latencyMs: Math.floor(4 + Math.random() * 15), lastTested: "Just now" }
-            : c
-        )
+        prev.map((c) => (c.id === connector.id ? { ...c, status: "DISCONNECTED" } : c)),
       );
-      setNotification(`Ping verified for connector.`);
+      setBanner({
+        intent: Intent.DANGER,
+        message: `Connection test for ${connector.name} failed — ${describeError(error)}`,
+      });
     } finally {
       setTestingId(null);
     }
   };
 
+  const closeAddDialog = () => {
+    setIsAddOpen(false);
+    setShowAddErrors(false);
+  };
+
   const handleAddConnector = () => {
-    if (!newName || !newEndpoint) return;
+    const name = newName.trim();
+    const endpoint = newEndpoint.trim();
+    if (!name || !endpoint) {
+      setShowAddErrors(true);
+      return;
+    }
     const created: Connector = {
       id: `conn-${Date.now()}`,
-      name: newName,
+      name,
       type: newType,
-      endpoint: newEndpoint,
+      endpoint,
       status: "CONNECTED",
       latencyMs: 12,
       lastTested: "Just now",
     };
-    setConnectors([created, ...connectors]);
-    setIsAddOpen(false);
+    setConnectors((prev) => [created, ...prev]);
+    closeAddDialog();
     setNewName("");
     setNewEndpoint("");
-    setNotification(`Successfully added and registered new connector: ${created.name}.`);
+    setBanner({ intent: Intent.SUCCESS, message: `Registered new connector: ${created.name}.` });
   };
 
+  const nameInvalid = showAddErrors && !newName.trim();
+  const endpointInvalid = showAddErrors && !newEndpoint.trim();
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {notification && (
-        <Callout intent={Intent.SUCCESS} icon="tick-circle">
-          {notification}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-4)" }}>
+      {banner && (
+        <Callout
+          intent={banner.intent}
+          icon={banner.intent === Intent.DANGER ? "error" : "tick-circle"}
+          compact
+        >
+          {banner.message}
         </Callout>
       )}
 
-      {/* Action Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Data Source & Lakehouse Connectors</h3>
-          <span style={{ fontSize: "12px", color: "var(--x52-text-muted)" }}>
-            Configured endpoints for Palantir Foundry transforms, Kafka streams, and relational data warehouses.
-          </span>
-        </div>
-        <Button
-          intent="primary"
-          icon="plus"
-          text="Add Connector"
-          onClick={() => setIsAddOpen(true)}
-        />
-      </div>
+      <Section
+        compact
+        elevation={Elevation.ZERO}
+        title="Data source & lakehouse connectors"
+        subtitle="Endpoints for Foundry transforms, Kafka streams, and relational warehouses."
+        rightElement={
+          <Button
+            intent={Intent.PRIMARY}
+            icon="plus"
+            text="Add connector"
+            onClick={() => setIsAddOpen(true)}
+          />
+        }
+      >
+        <SectionCard padded={false}>
+          {connectors.length === 0 ? (
+            <NonIdealState
+              icon="data-connection"
+              title="No connectors configured"
+              description="Register a Foundry, Kafka, PostgreSQL, Snowflake, or S3 endpoint to begin ingesting."
+              action={
+                <Button
+                  variant="outlined"
+                  icon="plus"
+                  text="Add connector"
+                  onClick={() => setIsAddOpen(true)}
+                />
+              }
+              layout="horizontal"
+            />
+          ) : (
+            <HTMLTable compact style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th scope="col">Connector</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Latency
+                  </th>
+                  <th scope="col">Last tested</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {connectors.map((connector) => {
+                  const presentation = STATUS_PRESENTATION[connector.status];
+                  return (
+                    <tr key={connector.id} className="x52-table-row">
+                      <td>
+                        <div style={{ fontWeight: "var(--x52-fw-medium)" }}>{connector.name}</div>
+                        <div
+                          className="x52-numeric x52-muted"
+                          style={{ fontSize: "var(--x52-fs-small)" }}
+                        >
+                          {connector.endpoint}
+                        </div>
+                      </td>
+                      <td>
+                        <Tag minimal>{connector.type.toUpperCase()}</Tag>
+                      </td>
+                      <td>
+                        <StatusIndicator tone={presentation.tone} label={presentation.label} />
+                      </td>
+                      <td className="x52-numeric" style={{ textAlign: "right" }}>
+                        {connector.latencyMs} ms
+                      </td>
+                      <td className="x52-muted">{connector.lastTested}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <Button
+                          variant="minimal"
+                          size="small"
+                          icon="refresh"
+                          text="Test"
+                          aria-label={`Test connection to ${connector.name}`}
+                          loading={testingId === connector.id}
+                          onClick={() => void handleTestConnection(connector)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </HTMLTable>
+          )}
+        </SectionCard>
+      </Section>
 
-      {/* Connectors List */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {connectors.map((connector) => (
-          <Card
-            key={connector.id}
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border-subtle)",
-              borderRadius: "10px",
-              padding: "16px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 2, minWidth: "260px" }}>
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "8px",
-                  backgroundColor: isDarkMode ? "#161b22" : "#f1f5f9",
-                  border: "1px solid var(--x52-border)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: "12px",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                {connector.type.toUpperCase().substring(0, 3)}
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "2px" }}>
-                  {connector.name}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--x52-text-muted)", fontFamily: "var(--font-mono)" }}>
-                  {connector.endpoint}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
-                  {connector.latencyMs} ms
-                </div>
-                <div style={{ fontSize: "10px", color: "var(--x52-text-muted)" }}>
-                  Tested {connector.lastTested}
-                </div>
-              </div>
-
-              <Tag
-                intent={connector.status === "CONNECTED" ? Intent.SUCCESS : Intent.WARNING}
-                minimal
-                round
-                style={{ fontWeight: 700 }}
-              >
-                {connector.status}
-              </Tag>
-
-              <Button
-                icon="refresh"
-                text={testingId === connector.id ? "Pinging..." : "Test Connection"}
-                loading={testingId === connector.id}
-                onClick={() => handleTestConnection(connector.id)}
-              />
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Add Connector Dialog */}
+      {/* Add connector dialog */}
       <Dialog
         isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-        title="Configure New Data Source Connector"
-        className={isDarkMode ? Classes.DARK : ""}
+        onClose={closeAddDialog}
+        title="Configure new data source connector"
+        className={isDarkMode ? Classes.DARK : undefined}
       >
         <div className={Classes.DIALOG_BODY}>
-          <FormGroup label="Connector Name" labelFor="conn-name" labelInfo="(required)">
+          <FormGroup
+            label="Connector name"
+            labelFor="conn-name"
+            labelInfo="(required)"
+            intent={nameInvalid ? Intent.DANGER : Intent.NONE}
+            helperText={nameInvalid ? "A connector name is required." : undefined}
+          >
             <InputGroup
               id="conn-name"
               placeholder="e.g. Production Foundry Gateway"
+              intent={nameInvalid ? Intent.DANGER : Intent.NONE}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
           </FormGroup>
 
-          <FormGroup label="Connector Type" labelFor="conn-type">
+          <FormGroup label="Connector type" labelFor="conn-type">
             <HTMLSelect
               id="conn-type"
               value={newType}
@@ -243,17 +290,24 @@ export const ConnectorManager: React.FC<ConnectorManagerProps> = ({ isDarkMode }
               fill
             >
               <option value="foundry">Palantir Foundry (REST / Ontology)</option>
-              <option value="kafka">Apache Kafka (High-Throughput Stream)</option>
-              <option value="postgres">PostgreSQL Database</option>
-              <option value="snowflake">Snowflake Cloud Data Warehouse</option>
-              <option value="s3">AWS S3 / Lakehouse Storage</option>
+              <option value="kafka">Apache Kafka (high-throughput stream)</option>
+              <option value="postgres">PostgreSQL database</option>
+              <option value="snowflake">Snowflake cloud data warehouse</option>
+              <option value="s3">AWS S3 / lakehouse storage</option>
             </HTMLSelect>
           </FormGroup>
 
-          <FormGroup label="Endpoint URI / Host" labelFor="conn-endpoint" labelInfo="(required)">
+          <FormGroup
+            label="Endpoint URI / host"
+            labelFor="conn-endpoint"
+            labelInfo="(required)"
+            intent={endpointInvalid ? Intent.DANGER : Intent.NONE}
+            helperText={endpointInvalid ? "An endpoint URI or host is required." : undefined}
+          >
             <InputGroup
               id="conn-endpoint"
               placeholder="e.g. https://foundry.corp.net/api"
+              intent={endpointInvalid ? Intent.DANGER : Intent.NONE}
               value={newEndpoint}
               onChange={(e) => setNewEndpoint(e.target.value)}
             />
@@ -261,8 +315,8 @@ export const ConnectorManager: React.FC<ConnectorManagerProps> = ({ isDarkMode }
         </div>
         <div className={Classes.DIALOG_FOOTER}>
           <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-            <Button onClick={() => setIsAddOpen(false)}>Cancel</Button>
-            <Button intent="primary" text="Register Connector" onClick={handleAddConnector} />
+            <Button variant="minimal" text="Cancel" onClick={closeAddDialog} />
+            <Button intent={Intent.PRIMARY} text="Register connector" onClick={handleAddConnector} />
           </div>
         </div>
       </Dialog>

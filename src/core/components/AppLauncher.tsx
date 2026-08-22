@@ -1,12 +1,15 @@
 import React from "react";
 import {
-  Dialog,
-  Classes,
-  Card,
-  Elevation,
-  Tag,
   Button,
+  Classes,
+  Dialog,
+  DialogBody,
+  DialogFooter,
+  Elevation,
+  Icon,
+  Tag,
 } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
 import type { X52AppManifest } from "../registry";
 
 interface AppLauncherProps {
@@ -18,85 +21,152 @@ interface AppLauncherProps {
   isDarkMode: boolean;
 }
 
+const DESCRIPTION_ID = "x52-launcher-description";
+
+/**
+ * Blueprint's own card styling on a real `<button>`: the grid tiles stay
+ * keyboard-reachable and get the global focus ring, while `Classes.SELECTED`
+ * draws the primary-intent ring on the app you are already in.
+ */
+const tileClasses = (isCurrent: boolean) =>
+  [
+    Classes.CARD,
+    Classes.INTERACTIVE,
+    Classes.elevationClass(Elevation.ZERO),
+    isCurrent ? Classes.SELECTED : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
 export const AppLauncher: React.FC<AppLauncherProps> = ({
   isOpen,
   onClose,
   apps,
   currentAppId,
   onSelectApp,
-  isDarkMode,
 }) => {
+  // NOTE: no `className={Classes.DARK}` here. The shell puts Blueprint's dark
+  // class on <html>, and this dialog portals into <body>, so it already
+  // inherits the theme; re-applying it nested the dark scope inside itself and
+  // tied the overlay's theme to a prop instead of the document.
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title="X52 Applications Suite & Platform Hub"
-      className={isDarkMode ? Classes.DARK : ""}
-      style={{ width: "680px", borderRadius: "12px" }}
+      icon="applications"
+      title="X52 application suite"
+      aria-describedby={DESCRIPTION_ID}
+      style={{ width: "min(760px, 92vw)" }}
     >
-      <div className={Classes.DIALOG_BODY}>
-        <p style={{ fontSize: "13px", color: "var(--x52-text-muted)", margin: "0 0 16px 0" }}>
-          Launch any standalone application or switch workspaces within the X52 platform suite:
+      <DialogBody>
+        <p
+          id={DESCRIPTION_ID}
+          className="x52-muted"
+          style={{
+            margin: "0 0 var(--x52-space-4) 0",
+            fontSize: "var(--x52-fs-small)",
+          }}
+        >
+          Switch workspaces, or open any application standalone. {apps.length} applications
+          registered.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
-          {apps.map((app) => (
-            <Card
-              key={app.id}
-              interactive
-              elevation={Elevation.ONE}
-              onClick={() => {
-                onSelectApp(app.id);
-                onClose();
-              }}
-              style={{
-                backgroundColor: currentAppId === app.id ? (isDarkMode ? "#1f2937" : "#e2e8f0") : "var(--x52-card-bg)",
-                border: currentAppId === app.id ? "1px solid #388bfd" : "1px solid var(--x52-border)",
-                borderRadius: "10px",
-                padding: "16px",
-                display: "flex",
-                gap: "14px",
-                alignItems: "flex-start",
-              }}
-            >
-              <div
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(228px, 1fr))",
+            gap: "var(--x52-space-2)",
+          }}
+        >
+          {apps.map((app) => {
+            const isCurrent = app.id === currentAppId;
+            return (
+              <button
+                key={app.id}
+                type="button"
+                className={tileClasses(isCurrent)}
+                aria-current={isCurrent ? "true" : undefined}
+                onClick={() => {
+                  onSelectApp(app.id);
+                  onClose();
+                }}
                 style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "8px",
-                  backgroundColor: isDarkMode ? "#ffffff" : "#0f172a",
-                  color: isDarkMode ? "#090d11" : "#ffffff",
+                  padding: "var(--x52-space-3)",
+                  textAlign: "left",
+                  font: "inherit",
+                  color: "var(--x52-text)",
+                  border: "none",
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: "13px",
-                  flexShrink: 0,
+                  flexDirection: "column",
+                  gap: "var(--x52-space-2)",
                 }}
               >
-                {app.shortName}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                  <strong style={{ fontSize: "14px" }}>{app.name}</strong>
-                  <Tag minimal round intent={app.intent} style={{ fontSize: "10px" }}>
-                    v{app.version}
-                  </Tag>
-                </div>
-                <p style={{ margin: 0, fontSize: "11px", color: "var(--x52-text-muted)", lineHeight: 1.4 }}>
-                  {app.description}
-                </p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--x52-space-2)",
+                    minWidth: 0,
+                  }}
+                >
+                  <Icon icon={app.icon as IconName} className="x52-muted" />
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontWeight: "var(--x52-fw-medium)",
+                      fontSize: "var(--x52-fs-base)",
+                      color: "var(--x52-heading)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {app.name}
+                  </span>
+                  {isCurrent && (
+                    <Tag minimal intent="primary" icon="tick">
+                      Current
+                    </Tag>
+                  )}
+                </span>
 
-      <div className={Classes.DIALOG_FOOTER}>
-        <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-          <Button onClick={onClose}>Close Hub</Button>
+                <span
+                  className="x52-muted"
+                  style={{
+                    fontSize: "var(--x52-fs-small)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {app.description}
+                </span>
+
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--x52-space-2)",
+                  }}
+                >
+                  <Tag minimal>{app.category}</Tag>
+                  <span
+                    className="x52-numeric x52-muted"
+                    style={{ fontSize: "var(--x52-fs-small)" }}
+                  >
+                    v{app.version}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </DialogBody>
+
+      <DialogFooter actions={<Button onClick={onClose}>Close</Button>} />
     </Dialog>
   );
 };

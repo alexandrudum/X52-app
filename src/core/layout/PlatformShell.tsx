@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Navbar,
   Alignment,
-  Classes,
   Tag,
   Button,
+  ButtonGroup,
+  Tooltip,
 } from "@blueprintjs/core";
+import { useTheme } from "../theme";
 import { X52Logo } from "../../components/X52Logo";
 import { AppLauncher } from "../components/AppLauncher";
 import { type X52AppManifest, registry } from "../registry";
@@ -91,7 +93,7 @@ const suiteApps: X52AppManifest[] = [
     category: "operations",
     intent: "success",
     standaloneRoute: "/?app=operations",
-    component: Dashboard as unknown as React.ComponentType<{ isDarkMode: boolean; isStandalone?: boolean }>,
+    component: Dashboard,
   },
   {
     id: "pipeline-studio",
@@ -134,131 +136,144 @@ const suiteApps: X52AppManifest[] = [
 suiteApps.forEach((app) => registry.register(app));
 
 export const PlatformShell: React.FC = () => {
-  // Check URL params for standalone mode or deep link
+  // Deep-link / standalone mode both come off the query string.
   const urlParams = new URLSearchParams(window.location.search);
   const initialAppId = urlParams.get("app") || "operations";
   const isStandalone = urlParams.get("standalone") === "true";
 
   const [activeAppId, setActiveAppId] = useState<string>(initialAppId);
   const [isLauncherOpen, setIsLauncherOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const { isDarkMode, toggleTheme } = useTheme();
 
-  const currentApp = registry.get(activeAppId) || suiteApps[0];
+  const currentApp = registry.get(activeAppId) ?? suiteApps[0];
   const ActiveComponent = currentApp.component;
 
-  const handleSelectApp = (appId: string) => {
-    setActiveAppId(appId);
-    // Update URL query without page reload
-    const newUrl = `${window.location.pathname}?app=${appId}${isStandalone ? "&standalone=true" : ""}`;
-    window.history.pushState({}, "", newUrl);
-  };
+  const handleSelectApp = useCallback(
+    (appId: string) => {
+      setActiveAppId(appId);
+      // Keep the URL shareable without a reload.
+      const query = `?app=${appId}${isStandalone ? "&standalone=true" : ""}`;
+      window.history.pushState({}, "", `${window.location.pathname}${query}`);
+    },
+    [isStandalone],
+  );
 
   return (
     <div
-      className={isDarkMode ? Classes.DARK : ""}
       style={{
         minHeight: "100vh",
         backgroundColor: "var(--x52-bg)",
         color: "var(--x52-text)",
-        padding: isStandalone ? "12px 16px" : "14px 20px 24px 20px",
-        transition: "background-color 0.2s ease, color 0.2s ease",
-        boxSizing: "border-box",
+        padding: isStandalone
+          ? "var(--x52-space-3) var(--x52-space-4)"
+          : "var(--x52-space-4)",
         width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--x52-space-4)",
       }}
     >
-      <div style={{ width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px", boxSizing: "border-box" }}>
-        
-        {/* Universal Platform Navigation Shell */}
-        <Navbar
-          style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "10px",
-            boxShadow: isDarkMode ? "0 8px 24px rgba(0,0,0,0.6)" : "0 2px 10px rgba(0,0,0,0.05)",
-            padding: "0 16px",
-          }}
-        >
-          <Navbar.Group align={Alignment.LEFT} style={{ gap: "10px" }}>
-            {/* Palantir 9-dots App Suite Launcher Button */}
+      {/* Universal platform navigation shell */}
+      <Navbar
+        style={{
+          backgroundColor: "var(--x52-card-bg)",
+          border: "1px solid var(--x52-border-subtle)",
+          borderRadius: "var(--x52-radius)",
+          boxShadow: "none",
+          padding: "0 var(--x52-space-3)",
+          flex: "none",
+        }}
+      >
+        <Navbar.Group align={Alignment.START} style={{ gap: "var(--x52-space-2)" }}>
+          <Tooltip content="Open the X52 app suite" placement="bottom-start">
             <Button
               icon="applications"
-              minimal
-              title="Open X52 App Suite Hub"
+              variant="minimal"
+              aria-label="Open the X52 app suite"
+              aria-haspopup="dialog"
               onClick={() => setIsLauncherOpen(true)}
-              style={{ fontWeight: 700 }}
             />
-            <X52Logo size={28} inverted={!isDarkMode} />
-            
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontWeight: 800, fontSize: "14px", letterSpacing: "-0.02em" }}>
-                X52 SUITE
-              </span>
-              <span style={{ color: "var(--x52-text-muted)" }}>/</span>
-              <span style={{ fontWeight: 700, fontSize: "14px" }}>
-                {currentApp.name}
-              </span>
-              {isStandalone && (
-                <Tag minimal round intent="warning" style={{ fontSize: "10px" }}>
-                  STANDALONE
-                </Tag>
-              )}
-            </div>
+          </Tooltip>
+          <X52Logo size={24} inverted={!isDarkMode} />
 
-            <Navbar.Divider />
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+            <span style={{ fontWeight: "var(--x52-fw-bold)", fontSize: "var(--x52-fs-base)" }}>
+              X52 Suite
+            </span>
+            <span aria-hidden="true" style={{ color: "var(--x52-text-muted)" }}>
+              /
+            </span>
+            <span style={{ color: "var(--x52-text-muted)", fontSize: "var(--x52-fs-base)" }}>
+              {currentApp.name}
+            </span>
+            {isStandalone && (
+              <Tag minimal intent="warning">
+                Standalone
+              </Tag>
+            )}
+          </div>
 
-            {/* Quick App Switcher Tabs */}
+          <Navbar.Divider />
+
+          {/* Quick app switcher. `active` is the only selection signal these
+              need — colouring them by intent would spend colour on chrome. */}
+          <ButtonGroup variant="minimal" aria-label="Switch application">
             {suiteApps.map((app) => (
-              <Button
-                key={app.id}
-                minimal
-                icon={app.icon as any}
-                text={app.shortName}
-                active={activeAppId === app.id}
-                onClick={() => handleSelectApp(app.id)}
-                title={app.name}
-              />
+              <Tooltip key={app.id} content={app.name} placement="bottom">
+                <Button
+                  icon={app.icon as never}
+                  text={app.shortName}
+                  active={activeAppId === app.id}
+                  aria-current={activeAppId === app.id ? "page" : undefined}
+                  onClick={() => handleSelectApp(app.id)}
+                />
+              </Tooltip>
             ))}
-          </Navbar.Group>
+          </ButtonGroup>
+        </Navbar.Group>
 
-          <Navbar.Group align={Alignment.RIGHT} style={{ gap: "8px" }}>
+        <Navbar.Group align={Alignment.END} style={{ gap: "var(--x52-space-1)" }}>
+          <Button
+            variant="minimal"
+            icon={isStandalone ? "fullscreen" : "export"}
+            text={isStandalone ? "Suite view" : "Standalone"}
+            onClick={() => {
+              const targetStandalone = !isStandalone;
+              const query = `?app=${activeAppId}${targetStandalone ? "&standalone=true" : ""}`;
+              window.location.href = `${window.location.pathname}${query}`;
+            }}
+          />
+          <Navbar.Divider />
+          <Tooltip content={isDarkMode ? "Switch to light theme" : "Switch to dark theme"} placement="bottom-end">
             <Button
-              minimal
-              icon={isStandalone ? "fullscreen" : "export"}
-              title={isStandalone ? "Exit Standalone Mode" : "Open in Standalone View"}
-              text={isStandalone ? "Suite View" : "Standalone"}
-              onClick={() => {
-                const targetStandalone = !isStandalone;
-                const newUrl = `${window.location.pathname}?app=${activeAppId}${targetStandalone ? "&standalone=true" : ""}`;
-                window.location.href = newUrl;
-              }}
-            />
-            <Navbar.Divider />
-            <Button
-              minimal
+              variant="minimal"
               icon={isDarkMode ? "flash" : "moon"}
-              onClick={() => setIsDarkMode((prev) => !prev)}
+              aria-label={isDarkMode ? "Switch to light theme" : "Switch to dark theme"}
+              aria-pressed={isDarkMode}
+              onClick={toggleTheme}
             />
-          </Navbar.Group>
-        </Navbar>
+          </Tooltip>
+        </Navbar.Group>
+      </Navbar>
 
-        {/* Dynamic Mounted Application */}
-        {activeAppId === "operations" ? (
-          <Dashboard />
-        ) : (
-          <ActiveComponent isDarkMode={isDarkMode} isStandalone={isStandalone} />
-        )}
-
-        {/* Global Suite Hub Modal */}
-        <AppLauncher
-          isOpen={isLauncherOpen}
-          onClose={() => setIsLauncherOpen(false)}
-          apps={suiteApps}
-          currentAppId={activeAppId}
-          onSelectApp={handleSelectApp}
+      {/* Mounted application. Remounting on app change keeps each app's
+          internal state from leaking into the next one. */}
+      <main style={{ flex: 1, minWidth: 0 }}>
+        <ActiveComponent
+          key={currentApp.id}
           isDarkMode={isDarkMode}
+          isStandalone={isStandalone}
         />
+      </main>
 
-      </div>
+      <AppLauncher
+        isOpen={isLauncherOpen}
+        onClose={() => setIsLauncherOpen(false)}
+        apps={suiteApps}
+        currentAppId={activeAppId}
+        onSelectApp={handleSelectApp}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 };

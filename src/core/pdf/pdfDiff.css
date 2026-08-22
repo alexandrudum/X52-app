@@ -1,0 +1,224 @@
+/* =============================================================================
+   PDF Diff Auditor — local styles.
+
+   Only what inline styles cannot express: hover / focus-visible / drag states
+   and the diff tone ramp. Every colour resolves to an `--x52-*` token, so the
+   diff highlights follow the theme (the intent tokens step one shade lighter
+   under `.bp6-dark`, which keeps a low-alpha wash legible on --x52-dark-gray2
+   instead of turning to mud).
+
+   Colour is never the only diff signal: every changed line also carries a
+   +/-/~ gutter marker, so the panes survive greyscale and colour-blindness.
+   ========================================================================== */
+
+/* --- Document panes -------------------------------------------------------- */
+
+/* Both panes share one monospace ruler so the two documents line up
+   line-for-line under synchronized scrolling. */
+.x52-pdf-doc {
+  font-family: var(--x52-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--x52-pdf-zoom, var(--x52-fs-base));
+  line-height: 1.6;
+}
+
+.x52-pdf-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x52-space-3);
+  width: 100%;
+  margin: 0;
+  padding: var(--x52-space-1) var(--x52-space-2);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--x52-radius) var(--x52-radius) 0;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background-color 100ms ease;
+}
+
+/* Diff lines are real buttons — keyboard reachable, not click-only divs. */
+button.x52-pdf-line {
+  appearance: none;
+  cursor: pointer;
+}
+
+button.x52-pdf-line:hover {
+  background-color: var(--x52-row-hover);
+}
+
+button.x52-pdf-line:focus-visible {
+  outline: 2px solid var(--x52-intent-primary);
+  outline-offset: -2px;
+}
+
+.x52-pdf-line__gutter {
+  display: flex;
+  flex: none;
+  gap: var(--x52-space-2);
+  color: var(--x52-text-muted);
+  font-size: var(--x52-fs-small);
+  user-select: none;
+}
+
+.x52-pdf-line__num {
+  display: inline-block;
+  width: 3ch;
+  text-align: right;
+}
+
+.x52-pdf-line__marker {
+  display: inline-block;
+  width: 1ch;
+  font-weight: var(--x52-fw-bold);
+}
+
+.x52-pdf-line__text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* Diff tones. `color-mix` keeps the wash tied to the live intent token, so the
+   same rule reads correctly in both themes. */
+.x52-pdf-line--removed {
+  background-color: color-mix(in srgb, var(--x52-intent-danger) 14%, transparent);
+  border-left-color: var(--x52-intent-danger);
+}
+
+.x52-pdf-line--removed .x52-pdf-line__marker {
+  color: var(--x52-intent-danger);
+}
+
+.x52-pdf-line--removed .x52-pdf-line__text {
+  text-decoration: line-through;
+  text-decoration-color: var(--x52-intent-danger);
+}
+
+.x52-pdf-line--added {
+  background-color: color-mix(in srgb, var(--x52-intent-success) 14%, transparent);
+  border-left-color: var(--x52-intent-success);
+}
+
+.x52-pdf-line--added .x52-pdf-line__marker {
+  color: var(--x52-intent-success);
+}
+
+/* Selection deepens the same wash and bolds the text, so the focused delta is
+   identifiable without relying on the hue shift alone. */
+button.x52-pdf-line--selected {
+  font-weight: var(--x52-fw-bold);
+}
+
+button.x52-pdf-line--selected.x52-pdf-line--removed,
+button.x52-pdf-line--selected.x52-pdf-line--removed:hover {
+  background-color: color-mix(in srgb, var(--x52-intent-danger) 30%, transparent);
+}
+
+button.x52-pdf-line--selected.x52-pdf-line--added,
+button.x52-pdf-line--selected.x52-pdf-line--added:hover {
+  background-color: color-mix(in srgb, var(--x52-intent-success) 30%, transparent);
+}
+
+/* --- Warning inspector rows ------------------------------------------------ */
+
+.x52-pdf-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x52-space-1);
+  width: 100%;
+  padding: var(--x52-space-2) var(--x52-space-3);
+  border: 1px solid var(--x52-border-subtle);
+  border-left: 2px solid var(--x52-border);
+  border-radius: var(--x52-radius);
+  background-color: var(--x52-card-secondary);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.x52-pdf-warning:hover {
+  background-color: var(--x52-row-hover);
+}
+
+.x52-pdf-warning:focus-visible {
+  outline: 2px solid var(--x52-intent-primary);
+  outline-offset: 1px;
+}
+
+.x52-pdf-warning--danger { border-left-color: var(--x52-intent-danger); }
+.x52-pdf-warning--warning { border-left-color: var(--x52-intent-warning); }
+
+/* Selection is the one place primary intent is spent in this list. */
+.x52-pdf-warning[aria-current="true"],
+.x52-pdf-warning[aria-current="true"]:hover {
+  background-color: color-mix(in srgb, var(--x52-intent-primary) 14%, transparent);
+  border-color: var(--x52-intent-primary);
+}
+
+.x52-pdf-snippet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x52-space-1);
+  margin-top: var(--x52-space-1);
+  padding: var(--x52-space-2);
+  border-radius: var(--x52-radius);
+  background-color: var(--x52-bg);
+  font-family: var(--x52-font-mono);
+  font-size: var(--x52-fs-small);
+  line-height: 1.5;
+}
+
+.x52-pdf-snippet__pre { color: var(--x52-intent-danger); }
+.x52-pdf-snippet__post { color: var(--x52-intent-success); }
+
+/* --- Upload drop zones ----------------------------------------------------- */
+
+.x52-pdf-drop {
+  border: 1px dashed var(--x52-border);
+  background-color: var(--x52-card-bg);
+  transition: background-color 100ms ease, border-color 100ms ease;
+}
+
+/* Drag-over is a border + background step, never a lift or a glow. */
+.x52-pdf-drop--over {
+  border-style: solid;
+  border-color: var(--x52-intent-primary);
+  background-color: color-mix(in srgb, var(--x52-intent-primary) 8%, var(--x52-card-bg));
+}
+
+.x52-pdf-drop--ready {
+  border-style: solid;
+  border-color: var(--x52-intent-success);
+}
+
+.x52-pdf-drop:focus-within {
+  outline: 2px solid var(--x52-intent-primary);
+  outline-offset: 2px;
+}
+
+/* The file input stays in the accessibility tree and the DOM — it is only
+   moved out of sight, so screen readers and file dialogs still reach it. */
+.x52-pdf-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .x52-pdf-line,
+  .x52-pdf-warning,
+  .x52-pdf-drop {
+    transition: none;
+  }
+}

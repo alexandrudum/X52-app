@@ -6,7 +6,13 @@ export const ComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: bool
   isDarkMode = true,
 }) => {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--x52-space-6)",
+      }}
+    >
       <CompareMatrixWidget isDarkMode={isDarkMode} />
       <DataCatalogList isDarkMode={isDarkMode} />
     </div>

@@ -1,15 +1,19 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
-  Card,
-  Elevation,
   Button,
-  Tag,
-  Intent,
   Callout,
-  Dialog,
+  Card,
   Classes,
+  Dialog,
+  Elevation,
+  HTMLTable,
+  Icon,
+  Intent,
+  Tag,
+  Tooltip,
 } from "@blueprintjs/core";
 import type { PDFDiffProject } from "../../core/pdf/pdfDiffTypes";
+import { severityIntent } from "../../core/pdf/pdfDiffTypes";
 import { sampleContractDiff } from "../../core/pdf/samplePdfDocuments";
 import { PDFUploadZone } from "../../core/pdf/PDFUploadZone";
 import { DualPDFViewer } from "../../core/pdf/DualPDFViewer";
@@ -19,116 +23,172 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
   isDarkMode = true,
 }) => {
   const [currentProject, setCurrentProject] = useState<PDFDiffProject | null>(sampleContractDiff);
-  const [selectedDiffId, setSelectedDiffId] = useState<string | null>("diff-01");
+  const [selectedDiffId, setSelectedDiffId] = useState<string | null>(
+    sampleContractDiff.diffItems[0]?.id ?? null,
+  );
   const [notification, setNotification] = useState<string | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  const handleStartComparison = (project: PDFDiffProject) => {
+  const handleStartComparison = useCallback((project: PDFDiffProject) => {
     setCurrentProject(project);
-    setSelectedDiffId(project.diffItems[0]?.id || null);
-    setNotification("PDF comparison initialized. All 5 legal and pricing deltas mapped across pages.");
-  };
+    setSelectedDiffId(project.diffItems[0]?.id ?? null);
+    setNotification(
+      `Comparison initialised — ${project.diffItems.length} deltas mapped across ${project.preDocument.totalPages} pages.`,
+    );
+  }, []);
 
-  const handleResetToUpload = () => {
+  const handleResetToUpload = useCallback(() => {
     setCurrentProject(null);
     setSelectedDiffId(null);
     setNotification(null);
-  };
+  }, []);
+
+  // Every count in the chrome is derived from the loaded project — nothing is
+  // hard-coded, so swapping the document pair can never leave a stale total.
+  const severityTally = useMemo(() => {
+    const items = currentProject?.diffItems ?? [];
+    return {
+      total: items.length,
+      high: items.filter((i) => i.severity === "HIGH").length,
+      medium: items.filter((i) => i.severity === "MEDIUM").length,
+      low: items.filter((i) => i.severity === "LOW").length,
+    };
+  }, [currentProject]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-4)" }}>
       {notification && (
         <Callout intent={Intent.SUCCESS} icon="tick-circle">
-          {notification}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "var(--x52-space-3)",
+            }}
+          >
+            <span>{notification}</span>
+            <Button
+              variant="minimal"
+              size="small"
+              icon="cross"
+              aria-label="Dismiss notification"
+              onClick={() => setNotification(null)}
+            />
+          </div>
         </Callout>
       )}
 
-      {/* When no project is loaded, show Stage 1 Upload Screen */}
       {!currentProject ? (
-        <PDFUploadZone
-          onStartComparison={handleStartComparison}
-          isDarkMode={isDarkMode}
-        />
+        <PDFUploadZone onStartComparison={handleStartComparison} isDarkMode={isDarkMode} />
       ) : (
-        /* When project is loaded, show Stage 2 Dual Viewers + Sidebar Workspace */
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          
-          {/* Top Control Action Bar */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-3)" }}>
+          {/* Workspace header. Flat surface: border + background step, no shadow. */}
           <Card
-            elevation={Elevation.ONE}
+            compact
+            elevation={Elevation.ZERO}
             style={{
               backgroundColor: "var(--x52-card-bg)",
               border: "1px solid var(--x52-border-subtle)",
-              borderRadius: "10px",
-              padding: "14px 20px",
+              borderRadius: "var(--x52-radius)",
+              boxShadow: "none",
+              padding: "var(--x52-space-3) var(--x52-space-4)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: "14px",
+              gap: "var(--x52-space-3)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  backgroundColor: isDarkMode ? "#ef4444" : "#0f172a",
-                  color: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: "12px",
-                }}
-              >
-                PDF
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)", minWidth: 0 }}>
+              <Icon icon="document-share" size={20} color="var(--x52-text-muted)" aria-hidden />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "var(--x52-fs-h5)",
+                      fontWeight: "var(--x52-fw-bold)",
+                      color: "var(--x52-heading)",
+                    }}
+                  >
                     {currentProject.title}
-                  </h3>
-                  <Tag intent={Intent.DANGER} round minimal style={{ fontWeight: 800 }}>
-                    5 DELTAS DETECTED
+                  </h2>
+                  <Tag
+                    minimal
+                    intent={severityTally.high > 0 ? Intent.DANGER : Intent.NONE}
+                    icon={severityTally.high > 0 ? "warning-sign" : undefined}
+                  >
+                    <span className="x52-numeric">{severityTally.total}</span> deltas
                   </Tag>
                 </div>
-                <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-                  Comparing: <code>{currentProject.preDocument.fileName}</code> ➔ <code>{currentProject.postDocument.fileName}</code>
-                </span>
+                <div
+                  className="x52-muted"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--x52-space-2)",
+                    fontSize: "var(--x52-fs-small)",
+                    fontFamily: "var(--x52-font-mono)",
+                    minWidth: 0,
+                  }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {currentProject.preDocument.fileName}
+                  </span>
+                  <Icon icon="arrow-right" size={12} aria-label="compared with" />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {currentProject.postDocument.fileName}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <Button icon="upload" text="Upload New Pair" onClick={handleResetToUpload} />
-              <Button icon="export" text="Export Audit Report" onClick={() => setIsExportOpen(true)} />
+            <div style={{ display: "flex", gap: "var(--x52-space-2)", alignItems: "center" }}>
+              <Tooltip content="Discard this pair and load two new documents" placement="bottom-end">
+                <Button
+                  variant="minimal"
+                  icon="upload"
+                  text="Upload new pair"
+                  onClick={handleResetToUpload}
+                />
+              </Tooltip>
               <Button
-                intent="success"
+                variant="outlined"
+                icon="export"
+                text="Export audit"
+                onClick={() => setIsExportOpen(true)}
+              />
+              <Button
+                intent={Intent.SUCCESS}
                 icon="tick"
-                text="Approve Revisions"
-                onClick={() => setNotification("Revisions approved and recorded in compliance audit log.")}
+                text="Approve revisions"
+                onClick={() =>
+                  setNotification("Revisions approved and recorded in the compliance audit log.")
+                }
               />
             </div>
           </Card>
 
-          {/* 2-Column Split: Dual Viewers (Left) & Warning Sidebar (Right) */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "16px", alignItems: "start" }}>
-            
-            {/* Left: Dual PDF Viewport */}
-            <div>
-              <DualPDFViewer
-                preDoc={currentProject.preDocument}
-                postDoc={currentProject.postDocument}
-                diffItems={currentProject.diffItems}
-                selectedDiffId={selectedDiffId}
-                onSelectDiff={setSelectedDiffId}
-                isDarkMode={isDarkMode}
-              />
-            </div>
+          {/* Viewers left, warning inspector right. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) 340px",
+              gap: "var(--x52-space-3)",
+              alignItems: "start",
+            }}
+          >
+            <DualPDFViewer
+              preDoc={currentProject.preDocument}
+              postDoc={currentProject.postDocument}
+              diffItems={currentProject.diffItems}
+              selectedDiffId={selectedDiffId}
+              onSelectDiff={setSelectedDiffId}
+              isDarkMode={isDarkMode}
+            />
 
-            {/* Right: Difference Warning Inspector Sidebar */}
-            <div style={{ position: "sticky", top: "20px" }}>
+            <div style={{ position: "sticky", top: "var(--x52-space-4)" }}>
               <DiffWarningSidebar
                 diffItems={currentProject.diffItems}
                 selectedDiffId={selectedDiffId}
@@ -136,35 +196,63 @@ export const PDFComparatorApp: React.FC<{ isDarkMode?: boolean; isStandalone?: b
                 isDarkMode={isDarkMode}
               />
             </div>
-
           </div>
         </div>
       )}
 
-      {/* Export Audit Report Dialog */}
+      {/* Dialogs are the one place elevation is spent. The dark class already
+          lives on <html>, so the portal inherits the theme. */}
       <Dialog
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
-        title="Export Compliance Audit Summary"
-        className={isDarkMode ? Classes.DARK : ""}
+        title="Export compliance audit summary"
+        icon="export"
       >
         <div className={Classes.DIALOG_BODY}>
-          <p>Summary of detected contract alterations across 2 document versions:</p>
-          <div style={{ padding: "12px", backgroundColor: "var(--x52-card-secondary)", borderRadius: "6px", fontSize: "12px", fontFamily: "var(--font-mono)" }}>
-            <div>• Total Deltas: 5 (3 High Risk, 2 Medium Risk)</div>
-            <div>• Financial Change: +$25,000 / yr licensing fee increase</div>
-            <div>• SLA Modification: Uptime commitment reduced from 99.99% to 99.5%</div>
-            <div>• Liability Ceiling: Reduced from 3x to 1x annual fees</div>
-            <div>• Termination Notice: Extended from 30 days to 90 days</div>
-          </div>
+          <p className="x52-muted" style={{ marginTop: 0, fontSize: "var(--x52-fs-small)" }}>
+            {severityTally.total} alterations detected between{" "}
+            <span style={{ fontFamily: "var(--x52-font-mono)" }}>
+              {currentProject?.preDocument.version}
+            </span>{" "}
+            and{" "}
+            <span style={{ fontFamily: "var(--x52-font-mono)" }}>
+              {currentProject?.postDocument.version}
+            </span>
+            {" — "}
+            {severityTally.high} high, {severityTally.medium} medium, {severityTally.low} low risk.
+          </p>
+          <HTMLTable compact striped style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th scope="col">Severity</th>
+                <th scope="col">Location</th>
+                <th scope="col">Finding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(currentProject?.diffItems ?? []).map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <Tag minimal intent={severityIntent(item.severity)}>
+                      {item.severity}
+                    </Tag>
+                  </td>
+                  <td className="x52-numeric" style={{ fontSize: "var(--x52-fs-small)" }}>
+                    p{item.pageNumber}:{item.lineNumber}
+                  </td>
+                  <td style={{ fontSize: "var(--x52-fs-small)" }}>{item.title}</td>
+                </tr>
+              ))}
+            </tbody>
+          </HTMLTable>
         </div>
         <div className={Classes.DIALOG_FOOTER}>
           <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-            <Button onClick={() => setIsExportOpen(false)}>Close</Button>
+            <Button variant="minimal" text="Close" onClick={() => setIsExportOpen(false)} />
             <Button
-              intent="primary"
+              intent={Intent.PRIMARY}
               icon="download"
-              text="Download Signed Audit PDF"
+              text="Download signed audit PDF"
               onClick={() => {
                 setNotification("Audit PDF summary downloaded.");
                 setIsExportOpen(false);

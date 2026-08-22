@@ -1,12 +1,18 @@
 import React, { useState } from "react";
 import {
-  Card,
-  Elevation,
-  InputGroup,
-  Tag,
-  Intent,
+  Alignment,
   Button,
+  Elevation,
+  HTMLTable,
+  InputGroup,
+  Intent,
+  NonIdealState,
+  NonIdealStateIconSize,
+  Section,
+  SectionCard,
+  Tag,
 } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
 import type { OntologyInstance } from "../widgetTypes";
 
 interface ObjectTableWidgetProps {
@@ -17,15 +23,74 @@ interface ObjectTableWidgetProps {
   isDarkMode?: boolean;
 }
 
+/** Flat widget frame — a hairline and a background step, no drop shadow. */
+const FRAME: React.CSSProperties = {
+  backgroundColor: "var(--x52-card-bg)",
+  border: "1px solid var(--x52-border-subtle)",
+  borderRadius: "var(--x52-radius)",
+  boxShadow: "none",
+};
+
+const HEAD_CELL: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  backgroundColor: "var(--x52-card-secondary)",
+  borderBottom: "1px solid var(--x52-border)",
+  padding: 0,
+  whiteSpace: "nowrap",
+};
+
+const CELL: React.CSSProperties = {
+  padding: "var(--x52-space-2) var(--x52-space-3)",
+  verticalAlign: "middle",
+};
+
+type SortKey = "id" | "title" | "type" | "Throughput";
+
+/**
+ * Sort values are read from the object's own fields first and only then from
+ * the property bag — the previous lookup went straight to `properties`, so
+ * sorting by "Object ID" silently fell back to sorting by title.
+ */
+function sortValue(obj: OntologyInstance, key: SortKey): string {
+  if (key === "id") return obj.id;
+  if (key === "title") return obj.title;
+  if (key === "type") return obj.type;
+  return String(obj.properties[key] ?? "");
+}
+
+/** "148.2 GB/s" must sort above "92.4 GB/s"; a plain string compare does not. */
+function compareValues(a: string, b: string): number {
+  const numA = Number.parseFloat(a);
+  const numB = Number.parseFloat(b);
+  if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) {
+    return numA - numB;
+  }
+  return a.toLowerCase().localeCompare(b.toLowerCase());
+}
+
+function statusIntent(status: string): Intent {
+  if (status === "ONLINE" || status === "OPTIMAL" || status === "STABLE") return Intent.SUCCESS;
+  if (status === "SYNCING") return Intent.PRIMARY;
+  return Intent.WARNING;
+}
+
+function statusIcon(status: string): IconName {
+  const intent = statusIntent(status);
+  if (intent === Intent.SUCCESS) return "tick-circle";
+  if (intent === Intent.PRIMARY) return "refresh";
+  return "warning-sign";
+}
+
 export const ObjectTableWidget: React.FC<ObjectTableWidgetProps> = ({
   objects,
   selectedObject,
   onSelectObject,
-  title = "Ontology Object Set (Table View)",
-  isDarkMode = true,
+  title = "Ontology object set",
 }) => {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<string>("title");
+  const [sortKey, setSortKey] = useState<SortKey>("title");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
 
   const filtered = objects.filter((o) => {
@@ -38,14 +103,11 @@ export const ObjectTableWidget: React.FC<ObjectTableWidgetProps> = ({
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    const valA = String(a.properties[sortKey] || a.title).toLowerCase();
-    const valB = String(b.properties[sortKey] || b.title).toLowerCase();
-    if (valA < valB) return sortAsc ? -1 : 1;
-    if (valA > valB) return sortAsc ? 1 : -1;
-    return 0;
+    const result = compareValues(sortValue(a, sortKey), sortValue(b, sortKey));
+    return sortAsc ? result : -result;
   });
 
-  const handleSort = (key: string) => {
+  const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else {
       setSortKey(key);
@@ -53,145 +115,169 @@ export const ObjectTableWidget: React.FC<ObjectTableWidgetProps> = ({
     }
   };
 
-  return (
-    <Card
-      elevation={Elevation.ONE}
+  const sortHeader = (key: SortKey, label: string, align: "left" | "right" = "left") => (
+    <th
+      scope="col"
+      aria-sort={sortKey === key ? (sortAsc ? "ascending" : "descending") : "none"}
+      style={{ ...HEAD_CELL, textAlign: align }}
+    >
+      <Button
+        variant="minimal"
+        size="small"
+        className="x52-label"
+        fill
+        alignText={align === "right" ? Alignment.END : Alignment.START}
+        endIcon={
+          sortKey === key
+            ? sortAsc
+              ? "chevron-up"
+              : "chevron-down"
+            : "double-caret-vertical"
+        }
+        text={label}
+        onClick={() => handleSort(key)}
+      />
+    </th>
+  );
+
+  const staticHeader = (label: string, width?: string) => (
+    <th
+      scope="col"
       style={{
-        backgroundColor: "var(--x52-card-bg)",
-        border: "1px solid var(--x52-border-subtle)",
-        borderRadius: "10px",
-        padding: 0,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
+        ...HEAD_CELL,
+        padding: "var(--x52-space-2) var(--x52-space-3)",
+        width,
       }}
     >
-      {/* Table Toolbar */}
-      <div
-        style={{
-          padding: "14px 18px",
-          borderBottom: "1px solid var(--x52-border)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>{title}</h4>
-          <Tag minimal round intent={Intent.PRIMARY} style={{ fontWeight: 700, fontSize: "10px" }}>
-            {sorted.length} OBJECTS
-          </Tag>
-        </div>
+      <span className="x52-label">{label}</span>
+    </th>
+  );
 
-        <div style={{ width: "240px" }}>
+  return (
+    <Section
+      compact
+      elevation={Elevation.ZERO}
+      style={FRAME}
+      title={<span className="x52-label">{title}</span>}
+      rightElement={
+        <>
+          <Tag minimal>
+            <span className="x52-numeric">{sorted.length}</span> of{" "}
+            <span className="x52-numeric">{objects.length}</span>
+          </Tag>
           <InputGroup
             leftIcon="search"
-            placeholder="Search object set..."
+            size="small"
+            aria-label="Search the object set"
+            placeholder="Search objects"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            small
-            round
+            style={{ width: "200px" }}
           />
-        </div>
-      </div>
-
-      {/* Grid Content */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead>
-            <tr style={{ backgroundColor: "var(--x52-card-secondary)", borderBottom: "1px solid var(--x52-border)" }}>
-              <th
-                onClick={() => handleSort("id")}
-                style={{ padding: "10px 16px", textAlign: "left", cursor: "pointer", fontWeight: 700, width: "130px" }}
-              >
-                Object ID {sortKey === "id" && (sortAsc ? "▲" : "▼")}
-              </th>
-              <th
-                onClick={() => handleSort("title")}
-                style={{ padding: "10px 16px", textAlign: "left", cursor: "pointer", fontWeight: 700 }}
-              >
-                Instance Title {sortKey === "title" && (sortAsc ? "▲" : "▼")}
-              </th>
-              <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 700 }}>
-                Ontology Type
-              </th>
-              <th
-                onClick={() => handleSort("Throughput")}
-                style={{ padding: "10px 16px", textAlign: "left", cursor: "pointer", fontWeight: 700 }}
-              >
-                Throughput
-              </th>
-              <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 700 }}>
-                Status
-              </th>
-              <th style={{ padding: "10px 16px", textAlign: "center", width: "80px", fontWeight: 700 }}>
-                Select
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((obj) => {
-              const isSelected = selectedObject?.id === obj.id;
-              const status = String(obj.properties["Status"] || "ONLINE");
-              return (
-                <tr
-                  key={obj.id}
-                  onClick={() => onSelectObject(obj)}
-                  style={{
-                    borderBottom: "1px solid var(--x52-border)",
-                    backgroundColor: isSelected
-                      ? isDarkMode
-                        ? "rgba(56, 139, 253, 0.15)"
-                        : "rgba(56, 139, 253, 0.08)"
-                      : undefined,
-                    cursor: "pointer",
-                    transition: "background-color 0.1s ease",
-                  }}
-                >
-                  <td style={{ padding: "10px 16px" }}>
-                    <code style={{ fontSize: "11px", fontWeight: 700 }}>{obj.id}</code>
-                  </td>
-                  <td style={{ padding: "10px 16px", fontWeight: 600 }}>
-                    {obj.title}
-                  </td>
-                  <td style={{ padding: "10px 16px" }}>
-                    <Tag minimal style={{ fontSize: "10px" }}>{obj.type}</Tag>
-                  </td>
-                  <td style={{ padding: "10px 16px", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
-                    {String(obj.properties["Throughput"] || "—")}
-                  </td>
-                  <td style={{ padding: "10px 16px" }}>
-                    <Tag
-                      minimal
-                      round
-                      intent={
-                        status === "ONLINE" || status === "OPTIMAL"
-                          ? Intent.SUCCESS
-                          : status === "SYNCING"
-                          ? Intent.PRIMARY
-                          : Intent.WARNING
-                      }
-                      style={{ fontWeight: 700, fontSize: "10px" }}
-                    >
-                      {status}
-                    </Tag>
-                  </td>
-                  <td style={{ padding: "10px 16px", textAlign: "center" }}>
-                    <Button
-                      small
-                      minimal
-                      icon={isSelected ? "tick" : "chevron-right"}
-                      intent={isSelected ? Intent.PRIMARY : Intent.NONE}
-                    />
-                  </td>
+        </>
+      }
+    >
+      <SectionCard padded={false}>
+        {sorted.length === 0 ? (
+          <div style={{ padding: "var(--x52-space-6) var(--x52-space-4)" }}>
+            <NonIdealState
+              icon="search"
+              iconSize={NonIdealStateIconSize.EXTRA_SMALL}
+              title="No matching objects"
+              description="No ontology object matches the current search term."
+              action={
+                <Button
+                  variant="minimal"
+                  size="small"
+                  text="Clear search"
+                  onClick={() => setSearch("")}
+                />
+              }
+            />
+          </div>
+        ) : (
+          <div style={{ maxHeight: "320px", overflow: "auto" }}>
+            <HTMLTable compact interactive style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  {sortHeader("id", "Object ID")}
+                  {sortHeader("title", "Instance title")}
+                  {sortHeader("type", "Ontology type")}
+                  {sortHeader("Throughput", "Throughput", "right")}
+                  {staticHeader("Status")}
+                  {staticHeader("Select", "72px")}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+              </thead>
+              <tbody>
+                {sorted.map((obj) => {
+                  const isSelected = selectedObject?.id === obj.id;
+                  const status = String(obj.properties["Status"] ?? "UNKNOWN");
+                  return (
+                    <tr
+                      key={obj.id}
+                      aria-selected={isSelected}
+                      onClick={() => onSelectObject(obj)}
+                      style={{
+                        cursor: "pointer",
+                        // Selection is carried by a rail plus a background step,
+                        // so it survives greyscale and colour-blindness.
+                        backgroundColor: isSelected ? "var(--x52-row-hover)" : undefined,
+                        boxShadow: isSelected
+                          ? "inset 2px 0 0 0 var(--x52-intent-primary)"
+                          : undefined,
+                      }}
+                    >
+                      <td style={{ ...CELL, width: "132px" }}>
+                        <span
+                          className="x52-numeric"
+                          style={{ fontSize: "var(--x52-fs-small)" }}
+                        >
+                          {obj.id}
+                        </span>
+                      </td>
+                      <td style={{ ...CELL, fontWeight: "var(--x52-fw-medium)" }}>
+                        {obj.title}
+                      </td>
+                      <td style={CELL}>
+                        <Tag minimal>{obj.type}</Tag>
+                      </td>
+                      <td
+                        className="x52-numeric"
+                        style={{ ...CELL, textAlign: "right" }}
+                      >
+                        {String(obj.properties["Throughput"] ?? "—")}
+                      </td>
+                      <td style={CELL}>
+                        <Tag minimal intent={statusIntent(status)} icon={statusIcon(status)}>
+                          {status}
+                        </Tag>
+                      </td>
+                      <td style={{ ...CELL, textAlign: "right" }}>
+                        <Button
+                          size="small"
+                          variant="minimal"
+                          icon={isSelected ? "tick" : "chevron-right"}
+                          intent={isSelected ? Intent.PRIMARY : Intent.NONE}
+                          aria-label={
+                            isSelected
+                              ? `${obj.title} is selected`
+                              : `Select ${obj.title}`
+                          }
+                          aria-pressed={isSelected}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectObject(obj);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </HTMLTable>
+          </div>
+        )}
+      </SectionCard>
+    </Section>
   );
 };

@@ -1,12 +1,5 @@
-import React from "react";
-import {
-  InputGroup,
-  HTMLSelect,
-  Button,
-  ButtonGroup,
-  Tag,
-  Intent,
-} from "@blueprintjs/core";
+import React, { useCallback } from "react";
+import { Button, ButtonGroup, HTMLSelect, InputGroup } from "@blueprintjs/core";
 
 export interface FilterSortState {
   searchQuery: string;
@@ -24,6 +17,14 @@ interface FilterSortBarProps {
   totalResults: number;
 }
 
+/**
+ * Dense single-row toolbar over a catalog listing: query, category facet, sort
+ * key + direction, a clear affordance, and the live result count.
+ *
+ * Controls sit at Blueprint's 30px default rather than `size="small"`, because
+ * `HTMLSelect` has no small variant in v6 and mixing 24px inputs with 30px
+ * selects breaks the toolbar baseline.
+ */
 export const FilterSortBar: React.FC<FilterSortBarProps> = ({
   state,
   onChange,
@@ -31,96 +32,127 @@ export const FilterSortBar: React.FC<FilterSortBarProps> = ({
   sortOptions,
   totalResults,
 }) => {
+  const hasActiveFilters =
+    state.searchQuery.trim() !== "" ||
+    state.selectedCategory !== "all" ||
+    state.statusFilter !== "all";
+
+  const handleClear = useCallback(() => {
+    onChange({
+      ...state,
+      searchQuery: "",
+      selectedCategory: "all",
+      statusFilter: "all",
+    });
+  }, [onChange, state]);
+
   return (
     <div
+      className="x52-panel"
+      role="search"
+      aria-label="Filter and sort the catalog"
       style={{
         display: "flex",
-        flexDirection: "column",
-        gap: "12px",
-        padding: "16px 20px",
-        backgroundColor: "var(--x52-card-bg)",
-        border: "1px solid var(--x52-border-subtle)",
-        borderRadius: "10px",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "var(--x52-space-2)",
+        padding: "var(--x52-space-2) var(--x52-space-3)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-        {/* Search Bar */}
-        <div style={{ flex: 1, minWidth: "260px" }}>
-          <InputGroup
-            leftIcon="search"
-            placeholder="Search items, tags, or IDs..."
-            value={state.searchQuery}
-            onChange={(e) => onChange({ ...state, searchQuery: e.target.value })}
-            rightElement={
-              state.searchQuery ? (
-                <Button minimal icon="cross" onClick={() => onChange({ ...state, searchQuery: "" })} />
-              ) : undefined
-            }
-          />
-        </div>
-
-        {/* Sort & Order Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)" }}>SORT BY:</span>
-          <HTMLSelect
-            value={state.sortBy}
-            onChange={(e) => onChange({ ...state, sortBy: e.target.value })}
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </HTMLSelect>
-
-          <ButtonGroup>
+      <InputGroup
+        aria-label="Search catalog by name, tag, or identifier"
+        leftIcon="search"
+        placeholder="Name, tag, or ID"
+        value={state.searchQuery}
+        onValueChange={(searchQuery) => onChange({ ...state, searchQuery })}
+        rightElement={
+          state.searchQuery ? (
             <Button
-              icon="sort-asc"
-              active={state.sortOrder === "asc"}
-              onClick={() => onChange({ ...state, sortOrder: "asc" })}
-              title="Ascending"
+              variant="minimal"
+              icon="cross"
+              aria-label="Clear the search query"
+              onClick={() => onChange({ ...state, searchQuery: "" })}
             />
-            <Button
-              icon="sort-desc"
-              active={state.sortOrder === "desc"}
-              onClick={() => onChange({ ...state, sortOrder: "desc" })}
-              title="Descending"
-            />
-          </ButtonGroup>
+          ) : undefined
+        }
+        style={{ flex: "1 1 220px", minWidth: "180px" }}
+      />
 
-          <Tag minimal round intent={Intent.PRIMARY} style={{ fontWeight: 700, marginLeft: "6px" }}>
-            {totalResults} ITEMS
-          </Tag>
-        </div>
-      </div>
-
-      {/* Category Filter Chips */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)", marginRight: "4px" }}>
-          CATEGORY:
-        </span>
-        <Tag
-          interactive
-          round
-          intent={state.selectedCategory === "all" ? Intent.PRIMARY : Intent.NONE}
-          onClick={() => onChange({ ...state, selectedCategory: "all" })}
-          style={{ cursor: "pointer", fontWeight: 600 }}
-        >
-          All Categories
-        </Tag>
+      <label
+        className="x52-label"
+        htmlFor="x52-catalog-category"
+        style={{ marginLeft: "var(--x52-space-2)" }}
+      >
+        Category
+      </label>
+      <HTMLSelect
+        id="x52-catalog-category"
+        value={state.selectedCategory}
+        onChange={(e) => onChange({ ...state, selectedCategory: e.currentTarget.value })}
+      >
+        <option value="all">All categories</option>
         {categories.map((cat) => (
-          <Tag
-            key={cat}
-            interactive
-            round
-            intent={state.selectedCategory === cat ? Intent.PRIMARY : Intent.NONE}
-            onClick={() => onChange({ ...state, selectedCategory: cat })}
-            style={{ cursor: "pointer", fontWeight: 600 }}
-          >
+          <option key={cat} value={cat}>
             {cat}
-          </Tag>
+          </option>
         ))}
-      </div>
+      </HTMLSelect>
+
+      <label
+        className="x52-label"
+        htmlFor="x52-catalog-sort"
+        style={{ marginLeft: "var(--x52-space-2)" }}
+      >
+        Sort
+      </label>
+      <HTMLSelect
+        id="x52-catalog-sort"
+        value={state.sortBy}
+        onChange={(e) => onChange({ ...state, sortBy: e.currentTarget.value })}
+      >
+        {sortOptions.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </HTMLSelect>
+
+      <ButtonGroup variant="outlined" aria-label="Sort direction">
+        <Button
+          icon="sort-asc"
+          aria-label="Sort ascending"
+          aria-pressed={state.sortOrder === "asc"}
+          active={state.sortOrder === "asc"}
+          onClick={() => onChange({ ...state, sortOrder: "asc" })}
+        />
+        <Button
+          icon="sort-desc"
+          aria-label="Sort descending"
+          aria-pressed={state.sortOrder === "desc"}
+          active={state.sortOrder === "desc"}
+          onClick={() => onChange({ ...state, sortOrder: "desc" })}
+        />
+      </ButtonGroup>
+
+      <Button
+        variant="minimal"
+        icon="filter-remove"
+        text="Clear filters"
+        disabled={!hasActiveFilters}
+        onClick={handleClear}
+      />
+
+      <span
+        className="x52-muted"
+        aria-live="polite"
+        style={{
+          marginLeft: "auto",
+          fontSize: "var(--x52-fs-small)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span className="x52-numeric">{totalResults}</span> items
+      </span>
     </div>
   );
 };

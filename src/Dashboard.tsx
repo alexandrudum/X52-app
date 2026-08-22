@@ -1,25 +1,26 @@
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   Button,
+  ButtonGroup,
+  Callout,
   Card,
-  Elevation,
-  Navbar,
-  Alignment,
-  Classes,
-  Tag,
-  InputGroup,
-  ProgressBar,
-  Tabs,
-  Tab,
-  Intent,
+  Divider,
   Drawer,
   DrawerSize,
+  Elevation,
+  HTMLTable,
+  InputGroup,
+  Intent,
+  NonIdealState,
   Position,
-  Callout,
-  Divider,
+  ProgressBar,
+  SegmentedControl,
+  Tab,
+  Tabs,
+  Tag,
+  Tooltip,
 } from "@blueprintjs/core";
 import { X52BrandMark } from "./components/X52BrandMark";
-import { X52Logo } from "./components/X52Logo";
 import { Sparkline } from "./components/Sparkline";
 import { BackendControlPanel } from "./components/admin/BackendControlPanel";
 
@@ -36,8 +37,138 @@ interface Pipeline {
   nodes: number;
 }
 
-export default function Dashboard() {
-  const [isDarkMode, setIsDarkMode] = useState(true);
+interface DashboardProps {
+  isDarkMode: boolean;
+  isStandalone?: boolean;
+}
+
+/** Base surface: a 1px border and a background step, never a drop shadow.
+    Blueprint's own elevation-0 ring is suppressed so the edge stays 1px. */
+const panelStyle: CSSProperties = {
+  backgroundColor: "var(--x52-card-bg)",
+  border: "1px solid var(--x52-border-subtle)",
+  borderRadius: "var(--x52-radius)",
+  boxShadow: "none",
+};
+
+/** Visually hidden but announced — Blueprint v6 ships no utility for this. */
+const srOnly: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  borderWidth: 0,
+};
+
+/**
+ * Status colour is never the only signal: the dot is always rendered next to
+ * its literal status text. SYNCING has no dedicated modifier in the shared
+ * stylesheet, so it borrows the primary intent token and the live pulse.
+ */
+function statusDot(status: Pipeline["status"]): { className: string; style?: CSSProperties } {
+  switch (status) {
+    case "ONLINE":
+      return { className: "x52-status-dot x52-status-dot--success" };
+    case "SYNCING":
+      return {
+        className: "x52-status-dot x52-status-dot--live",
+        style: { backgroundColor: "var(--x52-intent-primary)", color: "var(--x52-intent-primary)" },
+      };
+    case "STANDBY":
+      return { className: "x52-status-dot x52-status-dot--warning" };
+    case "ERROR":
+      return { className: "x52-status-dot x52-status-dot--danger" };
+    default:
+      return { className: "x52-status-dot" };
+  }
+}
+
+function StatusCell({ status }: { status: Pipeline["status"] }) {
+  const dot = statusDot(status);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+      <span className={dot.className} style={dot.style} />
+      <span style={{ fontSize: "var(--x52-fs-small)", fontWeight: "var(--x52-fw-medium)" }}>
+        {status}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * One telemetry tile. Figures use `.x52-numeric` so the four tiles' digits
+ * sit on a shared baseline grid; the trend line is a single chart hue rather
+ * than four decorative ones.
+ */
+function MetricTile({
+  label,
+  value,
+  unit,
+  note,
+  data,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  note: ReactNode;
+  data: number[];
+}) {
+  return (
+    <Card
+      elevation={Elevation.ZERO}
+      style={{
+        ...panelStyle,
+        padding: "var(--x52-space-4)",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        gap: "var(--x52-space-3)",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div className="x52-label">{label}</div>
+        <div
+          className="x52-numeric"
+          style={{
+            fontSize: "var(--x52-fs-h3)",
+            fontWeight: "var(--x52-fw-bold)",
+            lineHeight: 1.1,
+            color: "var(--x52-heading)",
+            margin: "var(--x52-space-2) 0 var(--x52-space-1)",
+          }}
+        >
+          {value}
+          <span
+            style={{
+              fontSize: "var(--x52-fs-base)",
+              fontWeight: "var(--x52-fw-normal)",
+              color: "var(--x52-text-muted)",
+              marginLeft: "var(--x52-space-1)",
+            }}
+          >
+            {unit}
+          </span>
+        </div>
+        <div className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+          {note}
+        </div>
+      </div>
+      <Sparkline data={data} width={104} height={40} />
+    </Card>
+  );
+}
+
+const LOG_LEVEL_INTENT: Record<string, Intent> = {
+  SUCCESS: Intent.SUCCESS,
+  WARN: Intent.WARNING,
+  ERROR: Intent.DANGER,
+};
+
+export default function Dashboard({ isDarkMode, isStandalone = false }: DashboardProps) {
   const [viewMode, setViewMode] = useState<"operations" | "backend">("operations");
   const [activeTab, setActiveTab] = useState<string>("pipelines");
   const [filterText, setFilterText] = useState("");
@@ -140,518 +271,532 @@ export default function Dashboard() {
   );
 
   return (
-    <div
-      className={isDarkMode ? Classes.DARK : ""}
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "var(--x52-bg)",
-        color: "var(--x52-text)",
-        padding: "20px 32px 40px 32px",
-        transition: "background-color 0.2s ease, color 0.2s ease",
-      }}
-    >
-      <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
-        
-        {/* Top Enterprise Header */}
-        <Navbar
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-4)", width: "100%" }}>
+      {/* Page toolbar. The suite shell owns app switching and the theme
+          control; this row only carries console-level identity and actions. */}
+      <Card elevation={Elevation.ZERO} style={{ ...panelStyle, padding: "var(--x52-space-4)" }}>
+        <div
           style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "10px",
-            boxShadow: isDarkMode ? "0 8px 24px rgba(0,0,0,0.6)" : "0 2px 10px rgba(0,0,0,0.05)",
-            padding: "0 16px",
-          }}
-        >
-          <Navbar.Group align={Alignment.LEFT} style={{ gap: "12px" }}>
-            <X52Logo size={32} inverted={!isDarkMode} />
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-              <span style={{ fontWeight: 800, letterSpacing: "-0.02em", fontSize: "14px" }}>
-                X52 COMMAND
-              </span>
-              <span style={{ fontSize: "10px", color: "var(--x52-text-muted)", letterSpacing: "0.04em" }}>
-                CLUSTER US-EAST / PROD
-              </span>
-            </div>
-            <Navbar.Divider />
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 6px" }}>
-              <span className="live-dot" />
-              <span style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "0.04em" }}>
-                52 / 52 NODES ACTIVE
-              </span>
-            </div>
-            <Navbar.Divider />
-            <Button
-              minimal
-              icon="dashboard"
-              text="Operations Console"
-              active={viewMode === "operations"}
-              onClick={() => setViewMode("operations")}
-            />
-            <Button
-              minimal
-              icon="control"
-              text="Backend Control Panel"
-              active={viewMode === "backend"}
-              onClick={() => setViewMode("backend")}
-            />
-          </Navbar.Group>
-
-          <Navbar.Group align={Alignment.RIGHT} style={{ gap: "10px" }}>
-            <Tag minimal round intent="primary" style={{ fontWeight: 600, fontSize: "11px" }}>
-              PALANTIR FOUNDRY READY
-            </Tag>
-            <Navbar.Divider />
-            <Button
-              minimal
-              icon={isDarkMode ? "flash" : "moon"}
-              text={isDarkMode ? "Light Theme" : "Dark Theme"}
-              onClick={() => setIsDarkMode((prev) => !prev)}
-            />
-            <Button minimal icon="user" />
-          </Navbar.Group>
-        </Navbar>
-
-        {viewMode === "backend" ? (
-          <BackendControlPanel isDarkMode={isDarkMode} />
-        ) : (
-          <>
-            {/* Hero Banner with Integrated X52 Brandmark */}
-        <Card
-          elevation={Elevation.TWO}
-          style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "12px",
-            padding: "24px 28px",
             display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: "28px",
+            gap: "var(--x52-space-4)",
             flexWrap: "wrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "24px", flex: 1, minWidth: "320px" }}>
-            <X52BrandMark size={52} isDarkMode={isDarkMode} />
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)", minWidth: "280px" }}>
+            {/* Standalone deployments have no shell branding above them. */}
+            {isStandalone && <X52BrandMark size={40} isDarkMode={isDarkMode} />}
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, letterSpacing: "-0.03em" }}>
-                  X52 Operational Intelligence Console
-                </h1>
-                <Tag intent="success" minimal round style={{ fontWeight: 700, fontSize: "11px" }}>
-                  ONLINE
-                </Tag>
-              </div>
-              <p style={{ margin: 0, color: "var(--x52-text-muted)", fontSize: "13px", lineHeight: "1.4" }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "var(--x52-fs-h4)",
+                  fontWeight: "var(--x52-fw-bold)",
+                  color: "var(--x52-heading)",
+                  lineHeight: 1.2,
+                }}
+              >
+                X52 Operational Intelligence Console
+              </h1>
+              <p
+                className="x52-muted"
+                style={{ margin: "var(--x52-space-1) 0 0", fontSize: "var(--x52-fs-small)" }}
+              >
                 High-density telemetry orchestrator and real-time analytical pipeline gateway.
               </p>
-              <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--x52-text-muted)" }}>
-                Last synchronized: <strong style={{ color: "var(--x52-text)" }}>{lastSyncTime}</strong>
-              </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
             <Button
+              intent={Intent.PRIMARY}
               icon="refresh"
-              text={isIngesting ? "Ingesting..." : "Trigger Ingestion"}
+              text={isIngesting ? "Ingesting" : "Trigger ingestion"}
               loading={isIngesting}
               onClick={handleTriggerIngestion}
-              className="x52-monochrome-btn"
-              style={{ padding: "8px 16px" }}
             />
-            <Button icon="cloud-download" text="Export Metrics" />
-            <Button minimal icon="cog" />
+            <Button variant="outlined" icon="cloud-download" text="Export metrics" />
+            <Tooltip content="Console settings" placement="bottom-end">
+              <Button variant="minimal" icon="cog" aria-label="Console settings" />
+            </Tooltip>
           </div>
-        </Card>
-
-        {/* 4-Card Telemetry & Metrics Grid with Sparklines */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "16px",
-          }}
-        >
-          {/* Card 1: Throughput */}
-          <Card
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border)",
-              borderRadius: "10px",
-              padding: "18px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "var(--x52-text-muted)", marginBottom: "6px" }}>
-                AGGREGATE THROUGHPUT
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--font-mono)", letterSpacing: "-0.04em", marginBottom: "6px" }}>
-                148.2 <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--x52-text-muted)" }}>GB/s</span>
-              </div>
-              <Tag minimal round intent={Intent.SUCCESS} style={{ fontSize: "11px", fontWeight: 700 }}>
-                ↑ +12.4% PEAK
-              </Tag>
-            </div>
-            <Sparkline data={[24, 38, 30, 45, 42, 60, 55, 78, 85, 92]} color="#22c55e" width={110} height={42} />
-          </Card>
-
-          {/* Card 2: Compute Matrix */}
-          <Card
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border)",
-              borderRadius: "10px",
-              padding: "18px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "var(--x52-text-muted)", marginBottom: "6px" }}>
-                ACTIVE COMPUTE NODES
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--font-mono)", letterSpacing: "-0.04em", marginBottom: "6px" }}>
-                52 <span style={{ fontSize: "16px", fontWeight: 600, color: "var(--x52-text-muted)" }}>/ 52</span>
-              </div>
-              <Tag minimal round intent={Intent.PRIMARY} style={{ fontSize: "11px", fontWeight: 700 }}>
-                100% HEALTHY
-              </Tag>
-            </div>
-            <Sparkline data={[52, 52, 51, 52, 52, 52, 52, 52, 52, 52]} color="#388bfd" width={110} height={42} />
-          </Card>
-
-          {/* Card 3: Latency */}
-          <Card
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border)",
-              borderRadius: "10px",
-              padding: "18px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "var(--x52-text-muted)", marginBottom: "6px" }}>
-                P99 INGESTION LATENCY
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--font-mono)", letterSpacing: "-0.04em", marginBottom: "6px" }}>
-                3.8 <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--x52-text-muted)" }}>ms</span>
-              </div>
-              <Tag minimal round intent={Intent.SUCCESS} style={{ fontSize: "11px", fontWeight: 700 }}>
-                ↓ -0.8 ms FASTER
-              </Tag>
-            </div>
-            <Sparkline data={[8.2, 7.5, 6.1, 5.4, 4.9, 4.2, 4.0, 3.8, 3.9, 3.8]} color="#a855f7" width={110} height={42} />
-          </Card>
-
-          {/* Card 4: Memory Utilization */}
-          <Card
-            elevation={Elevation.ONE}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: "1px solid var(--x52-border)",
-              borderRadius: "10px",
-              padding: "18px 20px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "var(--x52-text-muted)", marginBottom: "6px" }}>
-                CLUSTER MEMORY LOAD
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--font-mono)", letterSpacing: "-0.04em", marginBottom: "6px" }}>
-                41.8 <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--x52-text-muted)" }}>%</span>
-              </div>
-              <Tag minimal round intent={Intent.NONE} style={{ fontSize: "11px", fontWeight: 700 }}>
-                OPTIMAL (512 GB)
-              </Tag>
-            </div>
-            <Sparkline data={[35, 38, 42, 40, 44, 41, 43, 40, 42, 41.8]} color="#64748b" width={110} height={42} />
-          </Card>
         </div>
 
-        {/* Central Workstation Tabs & Panels */}
-        <Card
-          elevation={Elevation.ONE}
+        <Divider style={{ margin: "var(--x52-space-3) 0" }} />
+
+        {/* Cluster status strip: every colour here is paired with a literal. */}
+        <div
           style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "12px",
-            padding: "20px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--x52-space-4)",
+            flexWrap: "wrap",
           }}
         >
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "16px",
+              gap: "var(--x52-space-4)",
               flexWrap: "wrap",
-              gap: "16px",
+              fontSize: "var(--x52-fs-small)",
             }}
           >
-            <Tabs
-              id="dashboard-tabs"
-              selectedTabId={activeTab}
-              onChange={(id) => setActiveTab(id.toString())}
-              large
-            >
-              <Tab id="pipelines" title="Data Pipelines & Streams" />
-              <Tab id="nodes" title="52 Node Compute Matrix" />
-              <Tab id="logs" title="Live Event Stream" />
-            </Tabs>
-
-            {activeTab === "pipelines" && (
-              <div style={{ width: "280px" }}>
-                <InputGroup
-                  leftIcon="search"
-                  placeholder="Filter by name or PL-ID..."
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  small
-                  round
-                />
-              </div>
-            )}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+              <span className="x52-status-dot x52-status-dot--success x52-status-dot--live" />
+              <span className="x52-numeric">52 / 52</span>
+              <span className="x52-muted">nodes active</span>
+            </span>
+            <span className="x52-muted">
+              Cluster <span className="x52-numeric">US-EAST / PROD</span>
+            </span>
+            <span className="x52-muted">
+              Last synchronized: <span style={{ color: "var(--x52-text)" }}>{lastSyncTime}</span>
+            </span>
+            <Tag minimal>Foundry ready</Tag>
           </div>
 
-          <Divider style={{ margin: "0 0 16px 0" }} />
+          <SegmentedControl
+            aria-label="Console view"
+            size="small"
+            options={[
+              { label: "Operations", value: "operations" },
+              { label: "Backend control", value: "backend" },
+            ]}
+            value={viewMode}
+            onValueChange={(value) => setViewMode(value as "operations" | "backend")}
+          />
+        </div>
+      </Card>
 
-          {/* TAB 1: Pipelines View */}
-          {activeTab === "pipelines" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {filteredPipelines.length === 0 ? (
-                <Callout intent={Intent.WARNING}>No pipelines match your search criteria.</Callout>
-              ) : (
-                filteredPipelines.map((pipeline) => (
-                  <div
-                    key={pipeline.id}
-                    className="x52-table-row"
-                    onClick={() => setSelectedPipeline(pipeline)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "14px 18px",
-                      borderRadius: "8px",
-                      backgroundColor: isDarkMode ? "#161b22" : "#f8fafc",
-                      border: "1px solid var(--x52-border)",
-                      gap: "18px",
-                      cursor: "pointer",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ minWidth: "120px" }}>
-                      <code style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.02em" }}>
-                        {pipeline.id}
-                      </code>
-                    </div>
+      {viewMode === "backend" ? (
+        <BackendControlPanel isDarkMode={isDarkMode} />
+      ) : (
+        <>
+          {/* Telemetry tiles */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "var(--x52-space-4)",
+            }}
+          >
+            <MetricTile
+              label="Aggregate throughput"
+              value="148.2"
+              unit="GB/s"
+              note="+12.4% against the prior peak"
+              data={[24, 38, 30, 45, 42, 60, 55, 78, 85, 92]}
+            />
+            <MetricTile
+              label="Active compute nodes"
+              value="52"
+              unit="/ 52"
+              note="All replicas reporting healthy"
+              data={[52, 52, 51, 52, 52, 52, 52, 52, 52, 52]}
+            />
+            <MetricTile
+              label="P99 ingestion latency"
+              value="3.8"
+              unit="ms"
+              note="0.8 ms faster than the prior window"
+              data={[8.2, 7.5, 6.1, 5.4, 4.9, 4.2, 4.0, 3.8, 3.9, 3.8]}
+            />
+            <MetricTile
+              label="Cluster memory load"
+              value="41.8"
+              unit="%"
+              note="Within optimal band (512 GB)"
+              data={[35, 38, 42, 40, 44, 41, 43, 40, 42, 41.8]}
+            />
+          </div>
 
-                    <div style={{ flex: 2, minWidth: "220px" }}>
-                      <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "2px" }}>
-                        {pipeline.name}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-                        {pipeline.records} • {pipeline.nodes} Nodes Allocated • Updated {pipeline.time}
-                      </div>
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: "140px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--x52-text-muted)", marginBottom: "4px" }}>
-                        <span>LOAD</span>
-                        <strong style={{ color: "var(--x52-text)" }}>{Math.round(pipeline.load * 100)}%</strong>
-                      </div>
-                      <ProgressBar intent={pipeline.intent} value={pipeline.load} animate={false} stripes={false} />
-                    </div>
-
-                    <div style={{ minWidth: "90px", textAlign: "right" }}>
-                      <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
-                        {pipeline.throughput}
-                      </div>
-                      <div style={{ fontSize: "10px", color: "var(--x52-text-muted)" }}>
-                        {pipeline.latency}
-                      </div>
-                    </div>
-
-                    <div>
-                      <Tag intent={pipeline.intent} minimal round style={{ fontWeight: 700, fontSize: "11px" }}>
-                        {pipeline.status}
-                      </Tag>
-                    </div>
-
-                    <div>
-                      <Button minimal icon="chevron-right" />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: 52 Node Cluster Matrix */}
-          {activeTab === "nodes" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <span style={{ fontSize: "13px", color: "var(--x52-text-muted)" }}>
-                  Cluster grid representation of all 52 active worker nodes in cluster <strong>X-52</strong>.
-                </span>
-                <Tag minimal intent={Intent.SUCCESS} round>ALL 52 NODES SYNCHRONIZED</Tag>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(68px, 1fr))",
-                  gap: "8px",
-                  padding: "16px",
-                  backgroundColor: isDarkMode ? "#0d1117" : "#f1f5f9",
-                  borderRadius: "8px",
-                  border: "1px solid var(--x52-border)",
-                }}
-              >
-                {Array.from({ length: 52 }, (_, i) => {
-                  const nodeNum = (i + 1).toString().padStart(2, "0");
-                  const isHighLoad = i === 7 || i === 23;
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "10px 6px",
-                        textAlign: "center",
-                        borderRadius: "6px",
-                        backgroundColor: isDarkMode ? "#161b22" : "#ffffff",
-                        border: isHighLoad ? "1px solid #388bfd" : "1px solid var(--x52-border)",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      <div style={{ fontSize: "9px", color: "var(--x52-text-muted)", marginBottom: "2px" }}>NODE</div>
-                      <div style={{ fontSize: "13px", fontWeight: 800, fontFamily: "var(--font-mono)" }}>
-                        N-{nodeNum}
-                      </div>
-                      <div
-                        style={{
-                          width: "6px",
-                          height: "6px",
-                          borderRadius: "50%",
-                          backgroundColor: isHighLoad ? "#388bfd" : "#22c55e",
-                          margin: "6px auto 0 auto",
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Live Event Stream Logs */}
-          {activeTab === "logs" && (
+          {/* Workstation panel */}
+          <Card elevation={Elevation.ZERO} style={{ ...panelStyle, padding: "var(--x52-space-4)" }}>
             <div
               style={{
-                fontFamily: "var(--font-mono)",
-                backgroundColor: isDarkMode ? "#0d1117" : "#0f172a",
-                color: "#f8fafc",
-                borderRadius: "8px",
-                padding: "16px",
-                fontSize: "12px",
                 display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                maxHeight: "360px",
-                overflowY: "auto",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "var(--x52-space-4)",
+                flexWrap: "wrap",
               }}
             >
-              {logs.map((log, index) => (
-                <div key={index} style={{ display: "flex", gap: "12px", alignItems: "flex-start", lineHeight: "1.5" }}>
-                  <span style={{ color: "#64748b", flexShrink: 0 }}>[{log.time}]</span>
-                  <span
-                    style={{
-                      fontWeight: 700,
-                      color:
-                        log.level === "SUCCESS"
-                          ? "#4ade80"
-                          : log.level === "WARN"
-                          ? "#facc15"
-                          : "#60a5fa",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {log.level}
-                  </span>
-                  <span style={{ color: "#94a3b8", flexShrink: 0 }}>[{log.src}]</span>
-                  <span style={{ color: "#e2e8f0" }}>{log.msg}</span>
+              <Tabs
+                id="dashboard-tabs"
+                selectedTabId={activeTab}
+                onChange={(id) => setActiveTab(id.toString())}
+              >
+                <Tab id="pipelines" title="Data pipelines" tagContent={pipelines.length} />
+                <Tab id="nodes" title="Compute matrix" tagContent={52} />
+                <Tab id="logs" title="Event stream" tagContent={logs.length} />
+              </Tabs>
+
+              {activeTab === "pipelines" && (
+                <div style={{ width: "260px", maxWidth: "100%" }}>
+                  <InputGroup
+                    leftIcon="search"
+                    size="small"
+                    aria-label="Filter pipelines by name or identifier"
+                    placeholder="Filter by name or PL-ID"
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    rightElement={
+                      filterText ? (
+                        <Button
+                          variant="minimal"
+                          size="small"
+                          icon="cross"
+                          aria-label="Clear pipeline filter"
+                          onClick={() => setFilterText("")}
+                        />
+                      ) : undefined
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
+            <Divider style={{ margin: "var(--x52-space-3) 0" }} />
+
+            {/* TAB 1 — pipelines */}
+            {activeTab === "pipelines" &&
+              (filteredPipelines.length === 0 ? (
+                <NonIdealState
+                  icon="search"
+                  layout="horizontal"
+                  title="No matching pipelines"
+                  description={`Nothing matches the filter "${filterText}".`}
+                  action={
+                    <Button variant="minimal" text="Clear filter" onClick={() => setFilterText("")} />
+                  }
+                />
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <HTMLTable compact interactive style={{ width: "100%" }}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Pipeline</th>
+                        <th scope="col">Stream</th>
+                        <th scope="col">Load</th>
+                        <th scope="col" style={{ textAlign: "right" }}>
+                          Throughput
+                        </th>
+                        <th scope="col" style={{ textAlign: "right" }}>
+                          P99
+                        </th>
+                        <th scope="col">Status</th>
+                        <th scope="col">
+                          <span style={srOnly}>Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPipelines.map((pipeline) => (
+                        <tr key={pipeline.id} onClick={() => setSelectedPipeline(pipeline)}>
+                          <th
+                            scope="row"
+                            className="x52-numeric"
+                            style={{ whiteSpace: "nowrap", fontWeight: "var(--x52-fw-bold)" }}
+                          >
+                            {pipeline.id}
+                          </th>
+                          <td style={{ minWidth: "220px" }}>
+                            <div style={{ fontWeight: "var(--x52-fw-medium)" }}>{pipeline.name}</div>
+                            <div className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                              {pipeline.records} · {pipeline.nodes} nodes · updated {pipeline.time}
+                            </div>
+                          </td>
+                          <td style={{ minWidth: "140px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "var(--x52-space-2)",
+                                marginBottom: "var(--x52-space-1)",
+                              }}
+                            >
+                              <span className="x52-label">Load</span>
+                              <span className="x52-numeric" style={{ fontSize: "var(--x52-fs-small)" }}>
+                                {Math.round(pipeline.load * 100)}%
+                              </span>
+                            </div>
+                            {/* Meter intent tracks saturation, not status — the
+                                status column already carries the state. */}
+                            <ProgressBar
+                              intent={pipeline.load >= 0.8 ? Intent.WARNING : Intent.NONE}
+                              value={pipeline.load}
+                              animate={false}
+                              stripes={false}
+                            />
+                          </td>
+                          <td className="x52-numeric" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            {pipeline.throughput}
+                          </td>
+                          <td
+                            className="x52-numeric x52-muted"
+                            style={{ textAlign: "right", whiteSpace: "nowrap" }}
+                          >
+                            {pipeline.latency}
+                          </td>
+                          <td>
+                            <StatusCell status={pipeline.status} />
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <Button
+                              variant="minimal"
+                              size="small"
+                              icon="chevron-right"
+                              aria-label={`Open details for ${pipeline.name}`}
+                              onClick={() => setSelectedPipeline(pipeline)}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </HTMLTable>
                 </div>
               ))}
-            </div>
-          )}
-        </Card>
 
-        {/* Pipeline Detail Drawer */}
-        <Drawer
-          isOpen={selectedPipeline !== null}
-          onClose={() => setSelectedPipeline(null)}
-          title={selectedPipeline ? `${selectedPipeline.name} (${selectedPipeline.id})` : "Pipeline Details"}
-          position={Position.RIGHT}
-          size={DrawerSize.SMALL}
-          className={isDarkMode ? Classes.DARK : ""}
-        >
-          {selectedPipeline && (
-            <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <Callout intent={selectedPipeline.intent} title={`Status: ${selectedPipeline.status}`}>
-                This pipeline is actively processing streaming records with {selectedPipeline.throughput} bandwidth.
-              </Callout>
-
+            {/* TAB 2 — 52-node compute matrix */}
+            {activeTab === "nodes" && (
               <div>
-                <h4 style={{ margin: "0 0 8px 0" }}>Pipeline Specifications</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--x52-text-muted)" }}>Pipeline Identifier:</span>
-                    <code>{selectedPipeline.id}</code>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--x52-text-muted)" }}>Target Foundry Cluster:</span>
-                    <span>X-52-EAST-01</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--x52-text-muted)" }}>Throughput Rate:</span>
-                    <strong>{selectedPipeline.throughput}</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--x52-text-muted)" }}>P99 Latency:</span>
-                    <span>{selectedPipeline.latency}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--x52-text-muted)" }}>Allocated Nodes:</span>
-                    <span>{selectedPipeline.nodes} Dedicated</span>
-                  </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "var(--x52-space-4)",
+                    marginBottom: "var(--x52-space-3)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                    Grid representation of all 52 worker nodes in cluster{" "}
+                    <span className="x52-numeric">X-52</span>.
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--x52-space-2)", fontSize: "var(--x52-fs-small)" }}>
+                    <span className="x52-status-dot x52-status-dot--success" />
+                    All 52 nodes synchronized
+                  </span>
                 </div>
+                <ul
+                  aria-label="Compute node status"
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: "var(--x52-space-3)",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))",
+                    gap: "var(--x52-space-2)",
+                    backgroundColor: "var(--x52-card-secondary)",
+                    border: "1px solid var(--x52-border-subtle)",
+                    borderRadius: "var(--x52-radius)",
+                  }}
+                >
+                  {Array.from({ length: 52 }, (_, i) => {
+                    const nodeNum = (i + 1).toString().padStart(2, "0");
+                    const isHighLoad = i === 7 || i === 23;
+                    return (
+                      <li
+                        key={nodeNum}
+                        style={{
+                          padding: "var(--x52-space-2)",
+                          textAlign: "center",
+                          backgroundColor: "var(--x52-card-bg)",
+                          border: `1px solid ${
+                            isHighLoad ? "var(--x52-intent-warning)" : "var(--x52-border-subtle)"
+                          }`,
+                          borderRadius: "var(--x52-radius)",
+                        }}
+                      >
+                        <div
+                          className="x52-numeric"
+                          style={{ fontSize: "var(--x52-fs-small)", fontWeight: "var(--x52-fw-bold)" }}
+                        >
+                          N-{nodeNum}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "var(--x52-space-1)",
+                            marginTop: "var(--x52-space-1)",
+                          }}
+                        >
+                          <span
+                            className={`x52-status-dot ${
+                              isHighLoad ? "x52-status-dot--warning" : "x52-status-dot--success"
+                            }`}
+                          />
+                          <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+                            {isHighLoad ? "High" : "OK"}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
+            )}
 
-              <Divider />
-
-              <div style={{ display: "flex", gap: "10px" }}>
-                <Button intent="primary" icon="play" text="Run Ingestion" />
-                <Button icon="pause" text="Pause" />
-                <Button minimal intent="danger" icon="trash" />
+            {/* TAB 3 — live event stream */}
+            {activeTab === "logs" && (
+              <div
+                style={{
+                  maxHeight: "320px",
+                  overflowY: "auto",
+                  backgroundColor: "var(--x52-card-secondary)",
+                  border: "1px solid var(--x52-border-subtle)",
+                  borderRadius: "var(--x52-radius)",
+                }}
+              >
+                <HTMLTable compact style={{ width: "100%" }}>
+                  <caption style={srOnly}>Live cluster event stream</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" style={{ position: "sticky", top: 0, backgroundColor: "var(--x52-card-secondary)" }}>
+                        Time
+                      </th>
+                      <th scope="col" style={{ position: "sticky", top: 0, backgroundColor: "var(--x52-card-secondary)" }}>
+                        Level
+                      </th>
+                      <th scope="col" style={{ position: "sticky", top: 0, backgroundColor: "var(--x52-card-secondary)" }}>
+                        Source
+                      </th>
+                      <th scope="col" style={{ position: "sticky", top: 0, backgroundColor: "var(--x52-card-secondary)" }}>
+                        Event
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log, index) => (
+                      <tr key={`${log.time}-${index}`}>
+                        <td className="x52-numeric x52-muted" style={{ whiteSpace: "nowrap" }}>
+                          {log.time}
+                        </td>
+                        <td>
+                          <Tag minimal intent={LOG_LEVEL_INTENT[log.level] ?? Intent.NONE}>
+                            {log.level}
+                          </Tag>
+                        </td>
+                        <td className="x52-numeric" style={{ whiteSpace: "nowrap" }}>
+                          {log.src}
+                        </td>
+                        <td>{log.msg}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </HTMLTable>
               </div>
+            )}
+          </Card>
+        </>
+      )}
+
+      {/* Pipeline detail drawer — a genuine overlay, so it keeps its elevation. */}
+      <Drawer
+        isOpen={selectedPipeline !== null}
+        onClose={() => setSelectedPipeline(null)}
+        title={selectedPipeline ? `${selectedPipeline.name} (${selectedPipeline.id})` : "Pipeline details"}
+        position={Position.RIGHT}
+        size={DrawerSize.SMALL}
+      >
+        {selectedPipeline && (
+          <div
+            style={{
+              padding: "var(--x52-space-4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--x52-space-4)",
+            }}
+          >
+            <Callout intent={selectedPipeline.intent} title={`Status: ${selectedPipeline.status}`}>
+              This pipeline is actively processing streaming records with{" "}
+              {selectedPipeline.throughput} of bandwidth.
+            </Callout>
+
+            <div>
+              <h2 className="x52-label" style={{ margin: "0 0 var(--x52-space-2)" }}>
+                Pipeline specifications
+              </h2>
+              <HTMLTable compact style={{ width: "100%" }}>
+                <tbody>
+                  <tr>
+                    <th scope="row" className="x52-muted" style={{ fontWeight: "var(--x52-fw-normal)" }}>
+                      Pipeline identifier
+                    </th>
+                    <td className="x52-numeric" style={{ textAlign: "right" }}>
+                      {selectedPipeline.id}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="x52-muted" style={{ fontWeight: "var(--x52-fw-normal)" }}>
+                      Target Foundry cluster
+                    </th>
+                    <td className="x52-numeric" style={{ textAlign: "right" }}>
+                      X-52-EAST-01
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="x52-muted" style={{ fontWeight: "var(--x52-fw-normal)" }}>
+                      Throughput rate
+                    </th>
+                    <td className="x52-numeric" style={{ textAlign: "right" }}>
+                      {selectedPipeline.throughput}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="x52-muted" style={{ fontWeight: "var(--x52-fw-normal)" }}>
+                      P99 latency
+                    </th>
+                    <td className="x52-numeric" style={{ textAlign: "right" }}>
+                      {selectedPipeline.latency}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" className="x52-muted" style={{ fontWeight: "var(--x52-fw-normal)" }}>
+                      Allocated nodes
+                    </th>
+                    <td className="x52-numeric" style={{ textAlign: "right" }}>
+                      {selectedPipeline.nodes}
+                    </td>
+                  </tr>
+                </tbody>
+              </HTMLTable>
             </div>
-          )}
-        </Drawer>
-          </>
-        )}
 
-      </div>
+            <Divider style={{ margin: 0 }} />
+
+            {/* The page's single primary action lives in the toolbar, so the
+                drawer's controls stay neutral apart from the destructive one. */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--x52-space-2)",
+              }}
+            >
+              <ButtonGroup>
+                <Button icon="play" text="Run ingestion" />
+                <Button icon="pause" text="Pause" />
+              </ButtonGroup>
+              <Tooltip content="Delete pipeline" placement="top-end">
+                <Button
+                  variant="minimal"
+                  intent={Intent.DANGER}
+                  icon="trash"
+                  aria-label={`Delete pipeline ${selectedPipeline.id}`}
+                />
+              </Tooltip>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

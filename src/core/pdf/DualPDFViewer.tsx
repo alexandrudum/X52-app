@@ -1,14 +1,17 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Card,
-  Elevation,
   Button,
   ButtonGroup,
-  Tag,
-  Intent,
+  Card,
+  Divider,
+  Elevation,
   Slider,
+  Tag,
+  Tooltip,
 } from "@blueprintjs/core";
-import type { PDFDocumentSpec, PDFDiffItem } from "./pdfDiffTypes";
+import type { PDFDiffItem, PDFDocumentSpec, PDFPageContent, DiffSide } from "./pdfDiffTypes";
+import { diffLineTone } from "./pdfDiffTypes";
+import "./pdfDiff.css";
 
 interface DualPDFViewerProps {
   preDoc: PDFDocumentSpec;
@@ -19,323 +22,396 @@ interface DualPDFViewerProps {
   isDarkMode?: boolean;
 }
 
+const ZOOM_MIN = 75;
+const ZOOM_MAX = 150;
+const ZOOM_STEP = 25;
+
+/** Page state remembers which selection it was set against, so a new selection
+ *  can move the page during render instead of in a setState-inside-effect. */
+interface PageState {
+  page: number;
+  /** The `selectedDiffId` that was current when the page was last set. */
+  syncedTo: string | null;
+}
+
 export const DualPDFViewer: React.FC<DualPDFViewerProps> = ({
   preDoc,
   postDoc,
   diffItems,
   selectedDiffId,
   onSelectDiff,
-  isDarkMode = true,
+  isDarkMode: _isDarkMode = true,
 }) => {
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [syncScroll, setSyncScroll] = useState<boolean>(true);
 
   const leftPaneRef = useRef<HTMLDivElement>(null);
   const rightPaneRef = useRef<HTMLDivElement>(null);
+  // Guards the echo: assigning scrollTop fires the *other* pane's scroll
+  // handler, which would assign back and make the panes fight each other
+  // whenever their content heights differ.
+  const isSyncingRef = useRef(false);
 
-  // Synchronized scrolling
-  const handleScroll = (source: "left" | "right") => {
-    if (!syncScroll) return;
-    const srcEl = source === "left" ? leftPaneRef.current : rightPaneRef.current;
-    const tgtEl = source === "left" ? rightPaneRef.current : leftPaneRef.current;
-    if (srcEl && tgtEl) {
+  const totalPages = Math.max(preDoc.totalPages, postDoc.totalPages, 1);
+
+  const selectedDiff = useMemo(
+    () => diffItems.find((d) => d.id === selectedDiffId) ?? null,
+    [diffItems, selectedDiffId],
+  );
+
+  const [pageState, setPageState] = useState<PageState>(() => {
+    const initial = diffItems.find((d) => d.id === selectedDiffId);
+    return { page: initial?.pageNumber ?? 1, syncedTo: selectedDiffId };
+  });
+
+  // Derived during render: a selection made since the last manual page change
+  // wins, so following a warning from the sidebar lands on the right page with
+  // no effect and no cascading render.
+  const requestedPage =
+    pageState.syncedTo === selectedDiffId ? pageState.page : (selectedDiff?.pageNumber ?? pageState.page);
+  const currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
+
+  const goToPage = useCallback(
+    (page: number) => {
+      setPageState({ page: Math.min(Math.max(page, 1), totalPages), syncedTo: selectedDiffId });
+    },
+    [selectedDiffId, totalPages],
+  );
+
+  const handleScroll = useCallback(
+    (source: DiffSide) => {
+      if (!syncScroll) return;
+      if (isSyncingRef.current) {
+        isSyncingRef.current = false;
+        return;
+      }
+      const srcEl = source === "pre" ? leftPaneRef.current : rightPaneRef.current;
+      const tgtEl = source === "pre" ? rightPaneRef.current : leftPaneRef.current;
+      if (!srcEl || !tgtEl || tgtEl.scrollTop === srcEl.scrollTop) return;
+      isSyncingRef.current = true;
       tgtEl.scrollTop = srcEl.scrollTop;
-    }
-  };
-
-  // Scroll to selected diff when selectedDiffId changes
-  useEffect(() => {
-    if (!selectedDiffId) return;
-    const diff = diffItems.find((d) => d.id === selectedDiffId);
-    if (diff && diff.pageNumber !== currentPage) {
-      setCurrentPage(diff.pageNumber);
-    }
-  }, [selectedDiffId, diffItems, currentPage]);
+    },
+    [syncScroll],
+  );
 
   const currentDiffIndex = diffItems.findIndex((d) => d.id === selectedDiffId);
 
-  const handleNextDiff = () => {
-    if (diffItems.length === 0) return;
-    const nextIdx = (currentDiffIndex + 1) % diffItems.length;
-    onSelectDiff(diffItems[nextIdx].id);
-  };
+  const stepDiff = useCallback(
+    (delta: number) => {
+      if (diffItems.length === 0) return;
+      const base = currentDiffIndex >= 0 ? currentDiffIndex : 0;
+      const next = (base + delta + diffItems.length) % diffItems.length;
+      onSelectDiff(diffItems[next].id);
+    },
+    [currentDiffIndex, diffItems, onSelectDiff],
+  );
 
-  const handlePrevDiff = () => {
-    if (diffItems.length === 0) return;
-    const prevIdx = (currentDiffIndex - 1 + diffItems.length) % diffItems.length;
-    onSelectDiff(diffItems[prevIdx].id);
-  };
+  const prePage = preDoc.pages.find((p) => p.pageNumber === currentPage) ?? preDoc.pages[0];
+  const postPage = postDoc.pages.find((p) => p.pageNumber === currentPage) ?? postDoc.pages[0];
 
-  const prePage = preDoc.pages.find((p) => p.pageNumber === currentPage) || preDoc.pages[0];
-  const postPage = postDoc.pages.find((p) => p.pageNumber === currentPage) || postDoc.pages[0];
+  const changesOnPage = useMemo(
+    () => diffItems.filter((d) => d.pageNumber === currentPage).length,
+    [diffItems, currentPage],
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px", height: "100%" }}>
-      {/* Top Toolbar */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--x52-space-3)",
+        height: "100%",
+      }}
+    >
+      {/* Viewer toolbar. Flat: a border and a background step, no shadow. */}
       <Card
-        elevation={Elevation.ONE}
+        compact
+        elevation={Elevation.ZERO}
         style={{
           backgroundColor: "var(--x52-card-bg)",
           border: "1px solid var(--x52-border-subtle)",
-          borderRadius: "10px",
-          padding: "10px 16px",
+          borderRadius: "var(--x52-radius)",
+          boxShadow: "none",
+          padding: "var(--x52-space-2) var(--x52-space-3)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: "12px",
+          gap: "var(--x52-space-3)",
         }}
       >
-        {/* Navigation & Diff Stepper */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <ButtonGroup>
-            <Button
-              icon="chevron-left"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            />
-            <Button text={`Page ${currentPage} of ${preDoc.totalPages}`} minimal />
-            <Button
-              icon="chevron-right"
-              disabled={currentPage >= preDoc.totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(preDoc.totalPages, p + 1))}
-            />
-          </ButtonGroup>
-
-          <DividerVertical />
-
-          {/* Jump to Diff Buttons */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Button icon="arrow-up" small onClick={handlePrevDiff} title="Previous Difference" />
-            <span style={{ fontSize: "12px", fontWeight: 700 }}>
-              Diff {currentDiffIndex >= 0 ? currentDiffIndex + 1 : 1} of {diffItems.length}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+            <span className="x52-label">Page</span>
+            <ButtonGroup variant="outlined" size="small" aria-label="Page navigation">
+              <Tooltip content="Previous page" placement="bottom-start">
+                <Button
+                  icon="chevron-left"
+                  aria-label="Previous page"
+                  disabled={currentPage <= 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                />
+              </Tooltip>
+              <Tooltip content="Next page" placement="bottom">
+                <Button
+                  icon="chevron-right"
+                  aria-label="Next page"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                />
+              </Tooltip>
+            </ButtonGroup>
+            <span
+              className="x52-numeric"
+              aria-live="polite"
+              style={{ fontSize: "var(--x52-fs-small)", color: "var(--x52-text-muted)" }}
+            >
+              {currentPage} / {totalPages}
             </span>
-            <Button icon="arrow-down" small onClick={handleNextDiff} title="Next Difference" />
+          </div>
+
+          <Divider />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+            <span className="x52-label">Delta</span>
+            <Tooltip content="Previous difference" placement="bottom">
+              <Button
+                icon="arrow-up"
+                size="small"
+                variant="outlined"
+                aria-label="Previous difference"
+                disabled={diffItems.length === 0}
+                onClick={() => stepDiff(-1)}
+              />
+            </Tooltip>
+            <span
+              className="x52-numeric"
+              style={{ fontSize: "var(--x52-fs-small)", color: "var(--x52-text-muted)" }}
+            >
+              {currentDiffIndex >= 0 ? currentDiffIndex + 1 : 0} / {diffItems.length}
+            </span>
+            <Tooltip content="Next difference" placement="bottom">
+              <Button
+                icon="arrow-down"
+                size="small"
+                variant="outlined"
+                aria-label="Next difference"
+                disabled={diffItems.length === 0}
+                onClick={() => stepDiff(1)}
+              />
+            </Tooltip>
+            <Tag minimal icon="comparison">
+              {changesOnPage} on this page
+            </Tag>
           </div>
         </div>
 
-        {/* Zoom & Sync Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <Button
-            minimal
-            icon="duplicate"
-            intent={syncScroll ? Intent.PRIMARY : Intent.NONE}
-            text={syncScroll ? "Sync Scroll ON" : "Sync Scroll OFF"}
-            onClick={() => setSyncScroll(!syncScroll)}
-            small
-          />
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-4)" }}>
+          <Tooltip
+            content={syncScroll ? "Scrolling is locked across both panes" : "Panes scroll independently"}
+            placement="bottom"
+          >
+            <Button
+              variant="minimal"
+              size="small"
+              icon={syncScroll ? "lock" : "unlock"}
+              text={syncScroll ? "Scroll locked" : "Scroll free"}
+              active={syncScroll}
+              aria-pressed={syncScroll}
+              onClick={() => setSyncScroll((prev) => !prev)}
+            />
+          </Tooltip>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "160px" }}>
-            <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>ZOOM:</span>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
+            <span className="x52-label" id="x52-pdf-zoom-label">
+              Zoom
+            </span>
+            <div style={{ width: "120px" }}>
               <Slider
-                min={75}
-                max={150}
-                stepSize={25}
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
+                stepSize={ZOOM_STEP}
+                labelStepSize={ZOOM_STEP}
                 labelRenderer={(val) => `${val}%`}
                 value={zoomLevel}
                 onChange={setZoomLevel}
+                handleHtmlProps={{ "aria-label": "Document zoom level" }}
               />
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Dual Document Viewport */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", height: "calc(100vh - 210px)", minHeight: "600px" }}>
-        
-        {/* Left Pane: Pre-Change Document */}
-        <Card
-          elevation={Elevation.ONE}
-          style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "10px",
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "var(--x52-card-secondary)",
-              borderBottom: "1px solid var(--x52-border)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Tag minimal intent={Intent.DANGER} round style={{ fontWeight: 800 }}>
-                ORIGINAL (PRE-CHANGE)
-              </Tag>
-              <span style={{ fontSize: "12px", fontWeight: 700 }}>{preDoc.fileName}</span>
-            </div>
-            <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>{preDoc.version}</span>
-          </div>
-
-          {/* Document Body */}
-          <div
-            ref={leftPaneRef}
-            onScroll={() => handleScroll("left")}
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "24px 28px",
-              backgroundColor: isDarkMode ? "#0d1117" : "#ffffff",
-              transform: `scale(${zoomLevel / 100})`,
-              transformOrigin: "top left",
-              transition: "transform 0.1s ease",
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontFamily: "Georgia, serif" }}>
-              {prePage?.lines.map((line) => {
-                const diff = diffItems.find((d) => d.id === line.diffId);
-                const isSelected = selectedDiffId === line.diffId;
-                return (
-                  <div
-                    key={line.lineNumber}
-                    onClick={() => line.diffId && onSelectDiff(line.diffId)}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "14px",
-                      padding: "6px 8px",
-                      borderRadius: "6px",
-                      backgroundColor: isSelected
-                        ? "rgba(239, 68, 68, 0.2)"
-                        : diff
-                        ? "rgba(239, 68, 68, 0.08)"
-                        : undefined,
-                      borderLeft: diff ? "3px solid #ef4444" : "3px solid transparent",
-                      cursor: diff ? "pointer" : "default",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <span style={{ fontSize: "11px", color: "var(--x52-text-muted)", fontFamily: "monospace", width: "24px", flexShrink: 0, marginTop: "2px" }}>
-                      {line.lineNumber}
-                    </span>
-                    <div style={{ flex: 1, fontSize: "13px", lineHeight: "1.6" }}>
-                      {diff && (
-                        <div style={{ marginBottom: "4px" }}>
-                          <Tag intent={Intent.DANGER} minimal round style={{ fontWeight: 800, fontSize: "9px" }}>
-                            MODIFIED / DELETED
-                          </Tag>
-                        </div>
-                      )}
-                      <span style={{ textDecoration: diff ? "line-through" : undefined, opacity: diff ? 0.8 : 1 }}>
-                        {line.text}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Card>
-
-        {/* Right Pane: Post-Change Document */}
-        <Card
-          elevation={Elevation.ONE}
-          style={{
-            backgroundColor: "var(--x52-card-bg)",
-            border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "10px",
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "var(--x52-card-secondary)",
-              borderBottom: "1px solid var(--x52-border)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Tag minimal intent={Intent.SUCCESS} round style={{ fontWeight: 800 }}>
-                REVISED (POST-CHANGE)
-              </Tag>
-              <span style={{ fontSize: "12px", fontWeight: 700 }}>{postDoc.fileName}</span>
-            </div>
-            <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>{postDoc.version}</span>
-          </div>
-
-          {/* Document Body */}
-          <div
-            ref={rightPaneRef}
-            onScroll={() => handleScroll("right")}
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "24px 28px",
-              backgroundColor: isDarkMode ? "#0d1117" : "#ffffff",
-              transform: `scale(${zoomLevel / 100})`,
-              transformOrigin: "top left",
-              transition: "transform 0.1s ease",
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontFamily: "Georgia, serif" }}>
-              {postPage?.lines.map((line) => {
-                const diff = diffItems.find((d) => d.id === line.diffId);
-                const isSelected = selectedDiffId === line.diffId;
-                return (
-                  <div
-                    key={line.lineNumber}
-                    onClick={() => line.diffId && onSelectDiff(line.diffId)}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "14px",
-                      padding: "6px 8px",
-                      borderRadius: "6px",
-                      backgroundColor: isSelected
-                        ? "rgba(34, 197, 94, 0.2)"
-                        : diff
-                        ? "rgba(34, 197, 94, 0.08)"
-                        : undefined,
-                      borderLeft: diff ? "3px solid #22c55e" : "3px solid transparent",
-                      cursor: diff ? "pointer" : "default",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <span style={{ fontSize: "11px", color: "var(--x52-text-muted)", fontFamily: "monospace", width: "24px", flexShrink: 0, marginTop: "2px" }}>
-                      {line.lineNumber}
-                    </span>
-                    <div style={{ flex: 1, fontSize: "13px", lineHeight: "1.6" }}>
-                      {diff && (
-                        <div style={{ marginBottom: "4px" }}>
-                          <Tag intent={Intent.SUCCESS} minimal round style={{ fontWeight: 800, fontSize: "9px" }}>
-                            ADDED / REVISED
-                          </Tag>
-                        </div>
-                      )}
-                      <span style={{ fontWeight: diff ? 700 : undefined, color: diff ? (isDarkMode ? "#86efac" : "#15803d") : undefined }}>
-                        {line.text}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Card>
-
+      {/* Dual viewport. One grid, two identical panes — the split is the point. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "var(--x52-space-3)",
+          height: "calc(100vh - 220px)",
+          minHeight: "560px",
+        }}
+      >
+        <DocumentPane
+          side="pre"
+          label="Original"
+          doc={preDoc}
+          page={prePage}
+          diffItems={diffItems}
+          selectedDiffId={selectedDiffId}
+          onSelectDiff={onSelectDiff}
+          zoomLevel={zoomLevel}
+          paneRef={leftPaneRef}
+          onScroll={handleScroll}
+        />
+        <DocumentPane
+          side="post"
+          label="Revised"
+          doc={postDoc}
+          page={postPage}
+          diffItems={diffItems}
+          selectedDiffId={selectedDiffId}
+          onSelectDiff={onSelectDiff}
+          zoomLevel={zoomLevel}
+          paneRef={rightPaneRef}
+          onScroll={handleScroll}
+        />
       </div>
     </div>
   );
 };
 
-const DividerVertical = () => (
-  <div style={{ width: "1px", height: "20px", backgroundColor: "var(--x52-border)", margin: "0 6px" }} />
+interface DocumentPaneProps {
+  side: DiffSide;
+  label: string;
+  doc: PDFDocumentSpec;
+  page: PDFPageContent | undefined;
+  diffItems: PDFDiffItem[];
+  selectedDiffId: string | null;
+  onSelectDiff: (diffId: string) => void;
+  zoomLevel: number;
+  paneRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: (side: DiffSide) => void;
+}
+
+const DocumentPane: React.FC<DocumentPaneProps> = ({
+  side,
+  label,
+  doc,
+  page,
+  diffItems,
+  selectedDiffId,
+  onSelectDiff,
+  zoomLevel,
+  paneRef,
+  onScroll,
+}) => (
+  <Card
+    elevation={Elevation.ZERO}
+    style={{
+      backgroundColor: "var(--x52-card-bg)",
+      border: "1px solid var(--x52-border-subtle)",
+      borderRadius: "var(--x52-radius)",
+      boxShadow: "none",
+      padding: 0,
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      minWidth: 0,
+    }}
+  >
+    <header
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "var(--x52-space-3)",
+        padding: "var(--x52-space-2) var(--x52-space-3)",
+        backgroundColor: "var(--x52-card-secondary)",
+        borderBottom: "1px solid var(--x52-border-subtle)",
+        flex: "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)", minWidth: 0 }}>
+        <span className="x52-label">{label}</span>
+        <span
+          title={doc.fileName}
+          style={{
+            fontSize: "var(--x52-fs-small)",
+            fontFamily: "var(--x52-font-mono)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {doc.fileName}
+        </span>
+      </div>
+      <Tag minimal className="x52-numeric">
+        {doc.version}
+      </Tag>
+    </header>
+
+    <div
+      ref={paneRef}
+      onScroll={() => onScroll(side)}
+      tabIndex={0}
+      role="group"
+      aria-label={`${label} document, ${doc.fileName}`}
+      style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "var(--x52-space-3) var(--x52-space-2)",
+      }}
+    >
+      <div
+        className="x52-pdf-doc"
+        style={
+          {
+            "--x52-pdf-zoom": `calc(var(--x52-fs-base) * ${zoomLevel} / 100)`,
+          } as React.CSSProperties
+        }
+      >
+        {page?.lines.map((line) => {
+          const diff = line.diffId ? diffItems.find((d) => d.id === line.diffId) : undefined;
+          if (!diff) {
+            return (
+              <div key={line.lineNumber} className="x52-pdf-line">
+                <span className="x52-pdf-line__gutter" aria-hidden="true">
+                  <span className="x52-pdf-line__num">{line.lineNumber}</span>
+                  <span className="x52-pdf-line__marker" />
+                </span>
+                <span className="x52-pdf-line__text">{line.text}</span>
+              </div>
+            );
+          }
+
+          const tone = diffLineTone(diff.changeType, side);
+          const isSelected = selectedDiffId === diff.id;
+          return (
+            <button
+              key={line.lineNumber}
+              type="button"
+              className={[
+                "x52-pdf-line",
+                `x52-pdf-line--${tone.tone}`,
+                isSelected ? "x52-pdf-line--selected" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-current={isSelected ? "true" : undefined}
+              aria-label={`Line ${line.lineNumber}, ${tone.label}: ${diff.title}`}
+              onClick={() => onSelectDiff(diff.id)}
+            >
+              <span className="x52-pdf-line__gutter" aria-hidden="true">
+                <span className="x52-pdf-line__num">{line.lineNumber}</span>
+                <span className="x52-pdf-line__marker">{tone.marker}</span>
+              </span>
+              <span className="x52-pdf-line__text">{line.text}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  </Card>
 );

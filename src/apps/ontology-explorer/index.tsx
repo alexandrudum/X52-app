@@ -1,12 +1,17 @@
 import React, { useState } from "react";
 import {
+  Button,
+  Callout,
   Card,
   Elevation,
-  Button,
-  Tag,
-  Intent,
+  HTMLTable,
+  Icon,
   InputGroup,
-  Callout,
+  Intent,
+  NonIdealState,
+  Section,
+  SectionCard,
+  Tag,
 } from "@blueprintjs/core";
 
 interface OntologyObject {
@@ -17,9 +22,7 @@ interface OntologyObject {
   relations: string[];
 }
 
-export const OntologyExplorerApp: React.FC<{ isDarkMode?: boolean; isStandalone?: boolean }> = ({
-  isDarkMode: _isDarkMode,
-}) => {
+export const OntologyExplorerApp: React.FC<{ isDarkMode?: boolean; isStandalone?: boolean }> = () => {
   const [search, setSearch] = useState("");
   const [selectedObject, setSelectedObject] = useState<OntologyObject | null>(null);
 
@@ -36,94 +39,186 @@ export const OntologyExplorerApp: React.FC<{ isDarkMode?: boolean; isStandalone?
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--x52-space-4)" }}>
+      {/* Header. Flat surface — a hairline and a background step, no shadow. */}
       <Card
-        elevation={Elevation.ONE}
+        elevation={Elevation.ZERO}
         style={{
           backgroundColor: "var(--x52-card-bg)",
           border: "1px solid var(--x52-border-subtle)",
-          borderRadius: "10px",
-          padding: "16px 20px",
+          borderRadius: "var(--x52-radius)",
+          boxShadow: "none",
+          padding: "var(--x52-space-3) var(--x52-space-4)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: "16px",
+          gap: "var(--x52-space-4)",
         }}
       >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h3 style={{ margin: 0, fontWeight: 800, fontSize: "16px" }}>
-              X52 Ontology & Object Graph Explorer
-            </h3>
-            <Tag minimal intent={Intent.PRIMARY} round>FOUNDRY SYNCED</Tag>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-3)" }}>
+          <Icon icon="graph" size={20} className="x52-muted" />
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--x52-space-2)" }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "var(--x52-fs-h5)",
+                  fontWeight: "var(--x52-fw-bold)",
+                  color: "var(--x52-heading)",
+                }}
+              >
+                Ontology &amp; object graph
+              </h1>
+              <Tag minimal icon="cloud-tick">
+                Foundry synced
+              </Tag>
+            </div>
+            <span className="x52-muted" style={{ fontSize: "var(--x52-fs-small)" }}>
+              Inspect semantic entity schemas, relationships, and link matrices.
+            </span>
           </div>
-          <span style={{ fontSize: "12px", color: "var(--x52-text-muted)" }}>
-            Inspect semantic entity schemas, relationships, and link matrices.
-          </span>
         </div>
 
-        <div style={{ width: "260px" }}>
-          <InputGroup
-            leftIcon="search"
-            placeholder="Search entity types..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            small
-            round
-          />
-        </div>
+        <InputGroup
+          leftIcon="search"
+          aria-label="Search entity types"
+          placeholder="Search entity types…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          size="small"
+          style={{ width: "240px" }}
+        />
       </Card>
 
-      {/* Grid of Objects */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-        {filtered.map((obj) => (
-          <Card
-            key={obj.id}
-            interactive
-            elevation={Elevation.ONE}
-            onClick={() => setSelectedObject(obj)}
-            style={{
-              backgroundColor: "var(--x52-card-bg)",
-              border: selectedObject?.id === obj.id ? "1px solid #388bfd" : "1px solid var(--x52-border)",
-              borderRadius: "10px",
-              padding: "18px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <Tag minimal intent={Intent.SUCCESS} round style={{ fontWeight: 700 }}>
-                {obj.type}
-              </Tag>
-              <span style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-                {obj.propertiesCount} Props
-              </span>
+      <Section
+        title="Object types"
+        subtitle="Semantic link layer"
+        elevation={Elevation.ZERO}
+        rightElement={
+          <Tag minimal className="x52-numeric">
+            {filtered.length} / {ontologyObjects.length}
+          </Tag>
+        }
+      >
+        <SectionCard padded={false}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "var(--x52-space-8) var(--x52-space-4)" }}>
+              <NonIdealState
+                icon="search"
+                title="No matching object types"
+                description="No entity type or label matches the current filter."
+                action={
+                  <Button
+                    variant="minimal"
+                    icon="cross"
+                    text="Clear search"
+                    onClick={() => setSearch("")}
+                  />
+                }
+              />
             </div>
-
-            <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "8px" }}>
-              {obj.label}
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
-              {obj.relations.map((rel, idx) => (
-                <Tag key={idx} minimal style={{ fontSize: "10px" }}>
-                  ➔ {rel}
-                </Tag>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
+          ) : (
+            <HTMLTable compact interactive style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th scope="col">Object ID</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Label</th>
+                  <th scope="col" style={{ textAlign: "right" }}>Properties</th>
+                  <th scope="col">Relationships</th>
+                  <th scope="col" style={{ textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((obj) => {
+                  const isSelected = selectedObject?.id === obj.id;
+                  return (
+                    <tr
+                      key={obj.id}
+                      className="x52-table-row"
+                      // Mouse convenience only; the row's Inspect button below is
+                      // the keyboard-reachable equivalent, so no tab stop is lost.
+                      onClick={() => setSelectedObject(obj)}
+                      style={{
+                        cursor: "pointer",
+                        backgroundColor: isSelected ? "var(--x52-row-hover)" : undefined,
+                      }}
+                    >
+                      <td
+                        className="x52-numeric x52-muted"
+                        style={{
+                          boxShadow: isSelected
+                            ? "inset 2px 0 0 0 var(--x52-intent-primary)"
+                            : undefined,
+                        }}
+                      >
+                        {obj.id}
+                      </td>
+                      <td
+                        className="x52-numeric"
+                        style={{ fontWeight: "var(--x52-fw-medium)", color: "var(--x52-heading)" }}
+                      >
+                        {obj.type}
+                      </td>
+                      <td>{obj.label}</td>
+                      <td className="x52-numeric" style={{ textAlign: "right" }}>
+                        {obj.propertiesCount}
+                      </td>
+                      <td>
+                        <span
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                            gap: "var(--x52-space-1)",
+                          }}
+                        >
+                          {obj.relations.map((rel) => (
+                            <Tag key={rel} minimal icon="arrow-right">
+                              {rel}
+                            </Tag>
+                          ))}
+                          <span
+                            className="x52-muted"
+                            style={{ fontSize: "var(--x52-fs-small)" }}
+                          >
+                            {obj.relations.length} links
+                          </span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <Button
+                          variant="minimal"
+                          size="small"
+                          endIcon="chevron-right"
+                          text="Inspect"
+                          active={isSelected}
+                          aria-label={`Inspect ${obj.type}`}
+                          onClick={() => setSelectedObject(obj)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </HTMLTable>
+          )}
+        </SectionCard>
+      </Section>
 
       {selectedObject && (
         <Callout
           intent={Intent.PRIMARY}
-          title={`Entity Schema: ${selectedObject.type} (${selectedObject.label})`}
+          icon="graph"
+          title={`Entity schema · ${selectedObject.type}`}
         >
-          <p style={{ fontSize: "12px", margin: "0 0 10px 0" }}>
-            This object is linked to {selectedObject.relations.join(", ")}. Backed by Palantir Foundry semantic link layer.
+          <p style={{ fontSize: "var(--x52-fs-small)", margin: "0 0 var(--x52-space-3) 0" }}>
+            <span className="x52-numeric">{selectedObject.id}</span> — {selectedObject.label}.
+            Linked to {selectedObject.relations.join(", ")}. Backed by the Palantir Foundry
+            semantic link layer.
           </p>
-          <Button small intent="primary" text="Open Object 360 View" />
+          <Button size="small" intent={Intent.PRIMARY} text="Open Object 360 view" />
         </Callout>
       )}
     </div>

@@ -1,5 +1,5 @@
-import React from "react";
-import { Card, Elevation, Tag, Intent, Button } from "@blueprintjs/core";
+import React, { useCallback } from "react";
+import { Button, Card, Code, Elevation, Intent, ProgressBar, Tag } from "@blueprintjs/core";
 import type { DocumentChunk } from "./ragTypes";
 
 interface DocumentChunkViewerProps {
@@ -9,76 +9,183 @@ interface DocumentChunkViewerProps {
   isDarkMode?: boolean;
 }
 
+/**
+ * Similarity is the only place this surface spends colour: a strong match is
+ * `success`, a usable one is neutral, a marginal one is `warning`. The score is
+ * always shown as a number too, so the meaning survives without colour.
+ */
+function similarityIntent(percent: number): Intent {
+  if (percent >= 85) return Intent.SUCCESS;
+  if (percent >= 70) return Intent.NONE;
+  return Intent.WARNING;
+}
+
+/**
+ * A single retrieved passage. Dense card: title + muted source metadata, the
+ * similarity as a numeric tag over a ProgressBar, and the passage itself in
+ * monospace so offsets and identifiers line up.
+ *
+ * Theme comes entirely from the token layer, so `isDarkMode` is accepted for
+ * API compatibility with the widget registry but no longer read.
+ */
 export const DocumentChunkViewer: React.FC<DocumentChunkViewerProps> = ({
   chunk,
   isHighlighted = false,
   onSelect,
-  isDarkMode = true,
+  isDarkMode: _isDarkMode = true,
 }) => {
   const matchPct = Math.round(chunk.similarityScore * 100);
-  const scoreIntent =
-    matchPct >= 85
-      ? Intent.SUCCESS
-      : matchPct >= 70
-      ? Intent.PRIMARY
-      : Intent.WARNING;
+  const scoreIntent = similarityIntent(matchPct);
+  const isInteractive = onSelect != null;
+
+  const handleActivate = useCallback(() => {
+    onSelect?.(chunk);
+  }, [onSelect, chunk]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleActivate();
+      }
+    },
+    [handleActivate],
+  );
 
   return (
     <Card
-      elevation={Elevation.ONE}
-      interactive={!!onSelect}
-      onClick={() => onSelect && onSelect(chunk)}
+      compact
+      elevation={Elevation.ZERO}
+      interactive={isInteractive}
+      selected={isHighlighted}
+      role={isInteractive ? "button" : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-pressed={isInteractive ? isHighlighted : undefined}
+      onClick={isInteractive ? handleActivate : undefined}
+      onKeyDown={isInteractive ? handleKeyDown : undefined}
       style={{
         backgroundColor: "var(--x52-card-bg)",
-        border: isHighlighted
-          ? "2px solid #388bfd"
-          : "1px solid var(--x52-border)",
-        borderRadius: "8px",
-        padding: "16px",
+        border: `1px solid ${
+          isHighlighted ? "var(--x52-intent-primary)" : "var(--x52-border-subtle)"
+        }`,
+        borderRadius: "var(--x52-radius)",
+        boxShadow: "none",
+        padding: "var(--x52-space-3)",
         display: "flex",
         flexDirection: "column",
-        gap: "10px",
-        boxShadow: isHighlighted
-          ? "0 0 16px rgba(56, 139, 253, 0.35)"
-          : undefined,
-        transition: "all 0.15s ease",
+        gap: "var(--x52-space-2)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "2px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "var(--x52-space-3)",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: "var(--x52-fs-base)",
+              fontWeight: "var(--x52-fw-bold)",
+              color: "var(--x52-heading)",
+            }}
+          >
             {chunk.documentTitle}
           </div>
-          <div style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-            {chunk.section} • <code>{chunk.vectorId}</code>
+          <div
+            className="x52-muted"
+            style={{
+              fontSize: "var(--x52-fs-small)",
+              marginTop: "var(--x52-space-1)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--x52-space-2)",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>{chunk.section}</span>
+            <Code className="x52-numeric" style={{ fontSize: "var(--x52-fs-small)" }}>
+              {chunk.vectorId}
+            </Code>
           </div>
         </div>
 
-        <Tag intent={scoreIntent} round minimal style={{ fontWeight: 800, fontSize: "11px" }}>
-          {matchPct}% SIMILARITY
-        </Tag>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--x52-space-2)",
+            flex: "none",
+          }}
+        >
+          <Tag minimal intent={scoreIntent} className="x52-numeric">
+            {matchPct}% match
+          </Tag>
+          {isInteractive && (
+            <Button
+              variant="minimal"
+              size="small"
+              icon="document-open"
+              aria-label={`Open source document for ${chunk.documentTitle}`}
+              onClick={(event) => event.stopPropagation()}
+            />
+          )}
+        </div>
       </div>
 
-      <div
+      {/* Similarity as a bar — Blueprint's ProgressBar, not a hand-rolled div. */}
+      <ProgressBar
+        value={chunk.similarityScore}
+        intent={scoreIntent}
+        animate={false}
+        stripes={false}
+        role="meter"
+        aria-label={`Cosine similarity for ${chunk.documentTitle}`}
+        aria-valuenow={matchPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${matchPct} percent`}
+        style={{ height: "var(--x52-space-1)" }}
+      />
+
+      <blockquote
         style={{
-          fontSize: "12px",
-          lineHeight: "1.5",
-          padding: "10px 12px",
-          borderRadius: "6px",
-          backgroundColor: isDarkMode ? "#161b22" : "#f1f5f9",
-          border: "1px solid var(--x52-border)",
-          fontFamily: "var(--font-sans)",
+          margin: 0,
+          fontFamily: "var(--x52-font-mono)",
+          fontSize: "var(--x52-fs-small)",
+          lineHeight: 1.5,
+          padding: "var(--x52-space-2) var(--x52-space-3)",
+          borderRadius: "var(--x52-radius)",
+          backgroundColor: "var(--x52-card-secondary)",
+          border: "1px solid var(--x52-border-subtle)",
+          color: "var(--x52-text)",
+          whiteSpace: "pre-wrap",
         }}
       >
-        "{chunk.snippet}"
-      </div>
+        {chunk.snippet}
+      </blockquote>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "var(--x52-text-muted)" }}>
-        <span>Tokens: <strong>{chunk.tokenCount}</strong></span>
-        <span>Source: <code>{chunk.sourceUri}</code></span>
-        {onSelect && (
-          <Button minimal icon="document-open" text="View Source" small />
-        )}
+      <div
+        className="x52-muted"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--x52-space-3)",
+          fontSize: "var(--x52-fs-small)",
+        }}
+      >
+        <span>
+          Tokens <span className="x52-numeric">{chunk.tokenCount.toLocaleString()}</span>
+        </span>
+        <span
+          style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          title={chunk.sourceUri}
+        >
+          <Code style={{ fontSize: "var(--x52-fs-small)" }}>{chunk.sourceUri}</Code>
+        </span>
       </div>
     </Card>
   );
