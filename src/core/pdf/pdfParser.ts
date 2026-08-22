@@ -31,17 +31,16 @@ export async function extractTextFromPDF(file: File): Promise<string[][]> {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdfDoc = await loadingTask.promise;
-  const pagesLines: string[][] = [];
+  const pagesParagraphs: string[][] = [];
 
   for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
     const page = await pdfDoc.getPage(pageNum);
     const textContent = await page.getTextContent();
     
-    // Group text items by roughly same vertical Y coordinate to form coherent lines
+    // Group text items by vertical Y coordinate
     const lineMap = new Map<number, string[]>();
     for (const item of textContent.items) {
       if ("str" in item && item.str.trim().length > 0) {
-        // Round Y coordinate to 4px buckets to group items on same line
         const transform = item.transform;
         const y = Math.round(transform[5] / 4) * 4;
         if (!lineMap.has(y)) {
@@ -51,26 +50,63 @@ export async function extractTextFromPDF(file: File): Promise<string[][]> {
       }
     }
 
-    // Sort lines from top of page (higher Y) to bottom of page (lower Y)
     const sortedY = Array.from(lineMap.keys()).sort((a, b) => b - a);
-    const pageLines: string[] = [];
+    const rawLines: string[] = [];
 
     for (const y of sortedY) {
       const lineText = lineMap.get(y)!.join(" ").replace(/\s+/g, " ").trim();
       if (lineText.length > 0) {
-        pageLines.push(lineText);
+        rawLines.push(lineText);
       }
     }
 
-    // Fallback if empty
-    if (pageLines.length === 0) {
-      pageLines.push(`[Page ${pageNum}: No extractable text or scanned document]`);
+    // Group raw lines into coherent paragraphs / clauses
+    const paragraphs = groupLinesIntoParagraphs(rawLines);
+    if (paragraphs.length === 0) {
+      paragraphs.push(`[Page ${pageNum}: No extractable text found]`);
     }
 
-    pagesLines.push(pageLines);
+    pagesParagraphs.push(paragraphs);
   }
 
-  return pagesLines;
+  return pagesParagraphs;
+}
+
+/**
+ * Groups lines into paragraphs by detecting clause numbers (e.g. 1.1, Section),
+ * sentence endings (periods, colons), or large spacing.
+ */
+function groupLinesIntoParagraphs(lines: string[]): string[] {
+  const paragraphs: string[] = [];
+  let currentPara = "";
+
+  const isNewParagraphStart = (line: string) => {
+    // Starts with clause numbers like 1., 1.1, (a), Section, Article, Article I, or ALL CAPS heading
+    return (
+      /^(\d+(\.\d+)*|[A-Z]\.|\([a-z0-9]\)|Section\s+\d+|Article\s+[IVXLCDM\d]+|IN WITNESS|TABLE OF CONTENTS|EXHIBIT\s+[A-Z])/i.test(line) ||
+      (line.length < 50 && line === line.toUpperCase() && /[A-Z]/.test(line))
+    );
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!currentPara) {
+      currentPara = line;
+    } else if (isNewParagraphStart(line)) {
+      paragraphs.push(currentPara);
+      currentPara = line;
+    } else {
+      // Continue same paragraph
+      currentPara += " " + line;
+    }
+  }
+
+  if (currentPara) {
+    paragraphs.push(currentPara);
+  }
+
+  return paragraphs;
 }
 
 function classifyDifference(preText: string, postText: string): {
@@ -83,57 +119,57 @@ function classifyDifference(preText: string, postText: string): {
   const combined = `${preText} ${postText}`.toLowerCase();
 
   // Financial deltas
-  if (/(\$|€|£|usd|eur|fee|price|cost|payment|invoice|escalat|rate)/i.test(combined)) {
+  if (/(\$|€|£|usd|eur|fee|price|cost|payment|invoice|escalat|rate|annual|quarterly)/i.test(combined)) {
     return {
       category: "FINANCIAL",
       severity: "HIGH",
       intent: Intent.DANGER,
       title: "Financial Terms or Pricing Modification",
-      description: `Monetary clause altered between documents: "${postText.substring(0, 80)}..."`,
+      description: `Monetary terms modified in paragraph: "${postText.substring(0, 100)}..."`,
     };
   }
 
   // SLA & commitments
-  if (/(sla|uptime|availability|guarantee|support|response time|maintenance)/i.test(combined)) {
+  if (/(sla|uptime|availability|guarantee|support|response time|maintenance|tier)/i.test(combined)) {
     return {
       category: "SLA_CLAUSE",
       severity: "HIGH",
       intent: Intent.DANGER,
       title: "Service Level Agreement (SLA) Clause Altered",
-      description: `Operational commitment or uptime threshold updated: "${postText.substring(0, 80)}..."`,
+      description: `Uptime or operational commitments modified: "${postText.substring(0, 100)}..."`,
     };
   }
 
   // Legal Liability & Indemnity
-  if (/(liab|indemn|warrant|damages|breach|court|law|jurisdiction|confidential)/i.test(combined)) {
+  if (/(liab|indemn|warrant|damages|breach|court|law|jurisdiction|confidential|remedy)/i.test(combined)) {
     return {
       category: "LEGAL_RISK",
       severity: "HIGH",
       intent: Intent.DANGER,
-      title: "Legal Risk & Liability Limit Change",
-      description: `Indemnification or liability boundary modified: "${postText.substring(0, 80)}..."`,
+      title: "Legal Risk & Liability Boundary Change",
+      description: `Indemnification or liability limitation modified: "${postText.substring(0, 100)}..."`,
     };
   }
 
   // Date, Term, Notice period
-  if (/(term|notice|day|month|year|date|terminat|renew|expir)/i.test(combined)) {
+  if (/(term|notice|day|month|year|date|terminat|renew|expir|period)/i.test(combined)) {
     return {
       category: "DATE_TERMS",
       severity: "MEDIUM",
       intent: Intent.WARNING,
       title: "Term Duration or Notice Period Modified",
-      description: `Timeline, expiration or notice period updated: "${postText.substring(0, 80)}..."`,
+      description: `Timeline or termination notice period changed: "${postText.substring(0, 100)}..."`,
     };
   }
 
   // Technical metric / throughput
-  if (/(gb\/s|mb\/s|node|cluster|cpu|ram|quota|bandwidth|limit|byte)/i.test(combined)) {
+  if (/(gb\/s|mb\/s|node|cluster|cpu|ram|quota|bandwidth|limit|byte|storage)/i.test(combined)) {
     return {
       category: "METRIC",
       severity: "MEDIUM",
       intent: Intent.PRIMARY,
-      title: "System Metric or Throughput Quota Delta",
-      description: `Technical resource ceiling or specification modified: "${postText.substring(0, 80)}..."`,
+      title: "System Metric or Capacity Quota Delta",
+      description: `Resource ceiling or specification modified: "${postText.substring(0, 100)}..."`,
     };
   }
 
@@ -142,8 +178,8 @@ function classifyDifference(preText: string, postText: string): {
     category: "SLA_CLAUSE",
     severity: "MEDIUM",
     intent: Intent.PRIMARY,
-    title: "Document Clause Text Modification",
-    description: `Content revised from "${preText.substring(0, 40)}..." to "${postText.substring(0, 40)}..."`,
+    title: "Paragraph Clause Content Revised",
+    description: `Paragraph text updated between original and revised versions.`,
   };
 }
 
@@ -151,12 +187,12 @@ export async function parseAndDiffPDFs(
   fileA: File,
   fileB: File
 ): Promise<PDFDiffProject> {
-  const [pagesLinesA, pagesLinesB] = await Promise.all([
+  const [pagesA, pagesB] = await Promise.all([
     extractTextFromPDF(fileA),
     extractTextFromPDF(fileB),
   ]);
 
-  const maxPages = Math.max(pagesLinesA.length, pagesLinesB.length);
+  const maxPages = Math.max(pagesA.length, pagesB.length);
   const diffItems: PDFDiffItem[] = [];
   const prePages: PDFPageContent[] = [];
   const postPages: PDFPageContent[] = [];
@@ -165,89 +201,143 @@ export async function parseAndDiffPDFs(
 
   for (let p = 0; p < maxPages; p++) {
     const pageNum = p + 1;
-    const linesA = pagesLinesA[p] || [];
-    const linesB = pagesLinesB[p] || [];
+    const parasA = pagesA[p] || [];
+    const parasB = pagesB[p] || [];
 
-    const prePageContent: PDFPageContent = { pageNumber: pageNum, lines: [] };
-    const postPageContent: PDFPageContent = { pageNumber: pageNum, lines: [] };
+    const prePageContent: PDFPageContent = { pageNumber: pageNum, paragraphs: [] };
+    const postPageContent: PDFPageContent = { pageNumber: pageNum, paragraphs: [] };
 
-    const maxLines = Math.max(linesA.length, linesB.length);
+    const maxParas = Math.max(parasA.length, parasB.length);
 
-    for (let l = 0; l < maxLines; l++) {
-      const lineNum = l + 1;
-      const textA = linesA[l] || "";
-      const textB = linesB[l] || "";
+    for (let idx = 0; idx < maxParas; idx++) {
+      const paraA = parasA[idx] || "";
+      const paraB = parasB[idx] || "";
 
-      if (textA === textB && textA.length > 0) {
-        // Identical unchanged line
-        prePageContent.lines.push({ lineNumber: lineNum, text: textA });
-        postPageContent.lines.push({ lineNumber: lineNum, text: textB });
-      } else if (textA.length > 0 && textB.length > 0) {
-        // Modified line
+      if (paraA === paraB && paraA.length > 0) {
+        // Unchanged paragraph
+        const blockId = `p-pre-${pageNum}-${idx}`;
+        prePageContent.paragraphs.push({
+          id: blockId,
+          paragraphIndex: idx + 1,
+          text: paraA,
+          diffType: "UNCHANGED",
+        });
+        postPageContent.paragraphs.push({
+          id: `p-post-${pageNum}-${idx}`,
+          paragraphIndex: idx + 1,
+          text: paraB,
+          diffType: "UNCHANGED",
+        });
+      } else if (paraA.length > 0 && paraB.length > 0) {
+        // Modified paragraph
         const diffId = `diff-${diffCounter.toString().padStart(2, "0")}`;
         diffCounter++;
 
-        const classification = classifyDifference(textA, textB);
+        const classification = classifyDifference(paraA, paraB);
 
         diffItems.push({
           id: diffId,
           pageNumber: pageNum,
-          lineNumber: lineNum,
-          section: `Page ${pageNum} • Line ${lineNum}`,
+          paragraphIndex: idx + 1,
+          lineNumber: idx + 1,
+          section: `Page ${pageNum} • Paragraph ${idx + 1}`,
           category: classification.category,
           severity: classification.severity,
           intent: classification.intent,
           title: classification.title,
           description: classification.description,
-          preText: textA,
-          postText: textB,
+          preText: paraA,
+          postText: paraB,
           changeType: "MODIFIED",
         });
 
-        prePageContent.lines.push({ lineNumber: lineNum, text: textA, diffId });
-        postPageContent.lines.push({ lineNumber: lineNum, text: textB, diffId });
-      } else if (textA.length > 0 && textB.length === 0) {
-        // Deleted line from pre
+        prePageContent.paragraphs.push({
+          id: `p-pre-${pageNum}-${idx}`,
+          paragraphIndex: idx + 1,
+          text: paraA,
+          diffId,
+          diffType: "MODIFIED",
+          severity: classification.severity,
+          diffTitle: classification.title,
+          category: classification.category,
+          preSnippet: paraA,
+          postSnippet: paraB,
+        });
+
+        postPageContent.paragraphs.push({
+          id: `p-post-${pageNum}-${idx}`,
+          paragraphIndex: idx + 1,
+          text: paraB,
+          diffId,
+          diffType: "MODIFIED",
+          severity: classification.severity,
+          diffTitle: classification.title,
+          category: classification.category,
+          preSnippet: paraA,
+          postSnippet: paraB,
+        });
+      } else if (paraA.length > 0 && paraB.length === 0) {
+        // Deleted paragraph from original
         const diffId = `diff-${diffCounter.toString().padStart(2, "0")}`;
         diffCounter++;
 
         diffItems.push({
           id: diffId,
           pageNumber: pageNum,
-          lineNumber: lineNum,
-          section: `Page ${pageNum} • Line ${lineNum}`,
+          paragraphIndex: idx + 1,
+          lineNumber: idx + 1,
+          section: `Page ${pageNum} • Paragraph ${idx + 1}`,
           category: "LEGAL_RISK",
           severity: "HIGH",
           intent: Intent.DANGER,
-          title: "Clause Removed in Revised Version",
-          description: `Line deleted: "${textA.substring(0, 80)}..."`,
-          preText: textA,
-          postText: "[Line deleted in revised document]",
+          title: "Paragraph Deleted in Revised Document",
+          description: `Paragraph removed: "${paraA.substring(0, 100)}..."`,
+          preText: paraA,
+          postText: "[Paragraph omitted in revised document]",
           changeType: "DELETED",
         });
 
-        prePageContent.lines.push({ lineNumber: lineNum, text: textA, diffId });
-      } else if (textA.length === 0 && textB.length > 0) {
-        // Added line to post
+        prePageContent.paragraphs.push({
+          id: `p-pre-${pageNum}-${idx}`,
+          paragraphIndex: idx + 1,
+          text: paraA,
+          diffId,
+          diffType: "DELETED",
+          severity: "HIGH",
+          diffTitle: "Paragraph Deleted in Revision",
+          preSnippet: paraA,
+        });
+      } else if (paraA.length === 0 && paraB.length > 0) {
+        // Newly added paragraph in revised
         const diffId = `diff-${diffCounter.toString().padStart(2, "0")}`;
         diffCounter++;
 
         diffItems.push({
           id: diffId,
           pageNumber: pageNum,
-          lineNumber: lineNum,
-          section: `Page ${pageNum} • Line ${lineNum}`,
+          paragraphIndex: idx + 1,
+          lineNumber: idx + 1,
+          section: `Page ${pageNum} • Paragraph ${idx + 1}`,
           category: "SLA_CLAUSE",
           severity: "MEDIUM",
           intent: Intent.SUCCESS,
-          title: "New Clause Inserted into Revised Version",
-          description: `Line added: "${textB.substring(0, 80)}..."`,
-          preText: "[No corresponding line in original document]",
-          postText: textB,
+          title: "New Paragraph Added to Revision",
+          description: `New paragraph inserted: "${paraB.substring(0, 100)}..."`,
+          preText: "[No corresponding paragraph in original]",
+          postText: paraB,
           changeType: "ADDED",
         });
 
-        postPageContent.lines.push({ lineNumber: lineNum, text: textB, diffId });
+        postPageContent.paragraphs.push({
+          id: `p-post-${pageNum}-${idx}`,
+          paragraphIndex: idx + 1,
+          text: paraB,
+          diffId,
+          diffType: "ADDED",
+          severity: "MEDIUM",
+          diffTitle: "New Paragraph Added",
+          postSnippet: paraB,
+        });
       }
     }
 
