@@ -17,71 +17,145 @@ import type {
   ScheduledJobData,
   AuditEventData,
   SecurityTelemetryData,
+  PBACPurposeData,
+  ApprovalRequestData,
+  RetentionPolicyData,
+  ApolloReleaseTrackData,
+  FunctionsConfigData,
+  PlatformBroadcastData,
+  LineageGraphData,
 } from "./types";
 import { SystemRuntimeCategory } from "./components/SystemRuntimeCategory";
 import { ServicesHealthCategory } from "./components/ServicesHealthCategory";
 import { StorageConnectorsCategory } from "./components/StorageConnectorsCategory";
 import { TaskSchedulerCategory } from "./components/TaskSchedulerCategory";
-import { SecurityAuditCategory } from "./components/SecurityAuditCategory";
+import { SecurityIdentityTab } from "./components/SecurityIdentityTab";
+import { ResourceLifecycleTab } from "./components/ResourceLifecycleTab";
+import { EnvironmentConfigTab } from "./components/EnvironmentConfigTab";
+import { LineageAuditTab } from "./components/LineageAuditTab";
 
-type ControlPanelCategory = "system" | "services" | "storage" | "scheduler" | "security";
+type ControlPanelCategory =
+  | "system"
+  | "security-governance"
+  | "resource-lifecycle"
+  | "environment-config"
+  | "lineage-audit"
+  | "services"
+  | "storage"
+  | "scheduler";
 
 export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
-  const [activeCategory, setActiveCategory] = useState<ControlPanelCategory>("system");
+  const [activeCategory, setActiveCategory] = useState<ControlPanelCategory>("security-governance");
   const [isLiveStreaming, setIsLiveStreaming] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Live telemetry state
+  // Live telemetry & governance states
   const [systemMetrics, setSystemMetrics] = useState<SystemMetricsData | null>(null);
   const [services, setServices] = useState<ServiceComponentData[]>([]);
   const [storage, setStorage] = useState<StorageInfoData | null>(null);
   const [jobs, setJobs] = useState<ScheduledJobData[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEventData[]>([]);
   const [security, setSecurity] = useState<SecurityTelemetryData | null>(null);
+  const [pbacPurposes, setPbacPurposes] = useState<PBACPurposeData[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequestData[]>([]);
+  const [retentionPolicies, setRetentionPolicies] = useState<RetentionPolicyData[]>([]);
+  const [apolloTracks, setApolloTracks] = useState<ApolloReleaseTrackData[]>([]);
+  const [functionsConfig, setFunctionsConfig] = useState<FunctionsConfigData | null>(null);
+  const [broadcasts, setBroadcasts] = useState<PlatformBroadcastData[]>([]);
+  const [lineage, setLineage] = useState<LineageGraphData | null>(null);
 
   const fetchTelemetry = useCallback(async () => {
     try {
-      // Fetch system metrics
+      // 1. System Metrics
       const sysRes = await fetch("http://localhost:4000/api/system/metrics");
       if (sysRes.ok) {
         const sysJson = await sysRes.json();
         if (sysJson.success) setSystemMetrics(sysJson.data);
       }
 
-      // Fetch services status
+      // 2. Services
       const svcRes = await fetch("http://localhost:4000/api/services/status");
       if (svcRes.ok) {
         const svcJson = await svcRes.json();
         if (svcJson.success) setServices(svcJson.data);
       }
 
-      // Fetch storage info
+      // 3. Storage
       const storRes = await fetch("http://localhost:4000/api/storage/info");
       if (storRes.ok) {
         const storJson = await storRes.json();
         if (storJson.success) setStorage(storJson.data);
       }
 
-      // Fetch scheduled jobs
+      // 4. Scheduler
       const jobsRes = await fetch("http://localhost:4000/api/scheduler/jobs");
       if (jobsRes.ok) {
         const jobsJson = await jobsRes.json();
         if (jobsJson.success) setJobs(jobsJson.data);
       }
 
-      // Fetch audit logs
+      // 5. Audit
       const auditRes = await fetch("http://localhost:4000/api/security/audit");
       if (auditRes.ok) {
         const auditJson = await auditRes.json();
         if (auditJson.success) setAuditEvents(auditJson.data);
       }
 
-      // Fetch security telemetry
+      // 6. Security Telemetry
       const secRes = await fetch("http://localhost:4000/api/security/telemetry");
       if (secRes.ok) {
         const secJson = await secRes.json();
         if (secJson.success) setSecurity(secJson.data);
+      }
+
+      // 7. PBAC
+      const pbacRes = await fetch("http://localhost:4000/api/governance/pbac");
+      if (pbacRes.ok) {
+        const pbacJson = await pbacRes.json();
+        if (pbacJson.success) setPbacPurposes(pbacJson.data);
+      }
+
+      // 8. Approvals
+      const appRes = await fetch("http://localhost:4000/api/governance/approvals");
+      if (appRes.ok) {
+        const appJson = await appRes.json();
+        if (appJson.success) setApprovalRequests(appJson.data);
+      }
+
+      // 9. Retention
+      const retRes = await fetch("http://localhost:4000/api/governance/retention");
+      if (retRes.ok) {
+        const retJson = await retRes.json();
+        if (retJson.success) setRetentionPolicies(retJson.data);
+      }
+
+      // 10. Apollo
+      const apoRes = await fetch("http://localhost:4000/api/governance/apollo-upgrades");
+      if (apoRes.ok) {
+        const apoJson = await apoRes.json();
+        if (apoJson.success) setApolloTracks(apoJson.data);
+      }
+
+      // 11. Functions Config
+      const fnRes = await fetch("http://localhost:4000/api/governance/functions-config");
+      if (fnRes.ok) {
+        const fnJson = await fnRes.json();
+        if (fnJson.success) setFunctionsConfig(fnJson.data);
+      }
+
+      // 12. Communications
+      const commRes = await fetch("http://localhost:4000/api/governance/communications");
+      if (commRes.ok) {
+        const commJson = await commRes.json();
+        if (commJson.success) setBroadcasts(commJson.data);
+      }
+
+      // 13. Lineage
+      const linRes = await fetch("http://localhost:4000/api/governance/lineage");
+      if (linRes.ok) {
+        const linJson = await linRes.json();
+        if (linJson.success) setLineage(linJson.data);
       }
 
       setServerError(null);
@@ -104,6 +178,8 @@ export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
 
     return () => clearInterval(interval);
   }, [fetchTelemetry, isLiveStreaming]);
+
+  const pendingApprovalsCount = approvalRequests.filter((a) => a.status === "PENDING").length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -133,7 +209,7 @@ export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
-                Server Control Panel &amp; Telemetry
+                Palantir Enterprise Control Panel
               </h2>
               <Tag
                 intent={isLiveStreaming ? Intent.SUCCESS : Intent.WARNING}
@@ -142,9 +218,12 @@ export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
               >
                 {isLiveStreaming ? "● LIVE STREAM (2s)" : "PAUSED"}
               </Tag>
+              <Tag minimal intent={Intent.PRIMARY}>
+                Zero Trust Architecture
+              </Tag>
             </div>
             <div style={{ fontSize: "11px", color: "var(--x52-text-muted)" }}>
-              Real-time hardware, process runtime, worker services, and security audit telemetry.
+              Centralized administrative hub for security governance, PBAC, resource budgets, Apollo upgrades, and FedRAMP audit lineage.
             </div>
           </div>
         </div>
@@ -183,39 +262,61 @@ export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
       >
         <ButtonGroup variant="minimal" size="small" style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
           <Button
+            icon="shield"
+            text="🛡️ Security & Identity Governance"
+            active={activeCategory === "security-governance"}
+            intent={activeCategory === "security-governance" ? Intent.PRIMARY : Intent.NONE}
+            rightIcon={pendingApprovalsCount > 0 ? <Tag round intent={Intent.WARNING} style={{ fontSize: "9px" }}>{pendingApprovalsCount}</Tag> : undefined}
+            onClick={() => setActiveCategory("security-governance")}
+          />
+          <Button
+            icon="chart"
+            text="📊 Resource & Lifecycle Management"
+            active={activeCategory === "resource-lifecycle"}
+            intent={activeCategory === "resource-lifecycle" ? Intent.PRIMARY : Intent.NONE}
+            onClick={() => setActiveCategory("resource-lifecycle")}
+          />
+          <Button
+            icon="cog"
+            text="💡 Environment & Space Configuration"
+            active={activeCategory === "environment-config"}
+            intent={activeCategory === "environment-config" ? Intent.PRIMARY : Intent.NONE}
+            onClick={() => setActiveCategory("environment-config")}
+          />
+          <Button
+            icon="git-merge"
+            text="🔍 Lineage & Audit Visibility"
+            active={activeCategory === "lineage-audit"}
+            intent={activeCategory === "lineage-audit" ? Intent.PRIMARY : Intent.NONE}
+            onClick={() => setActiveCategory("lineage-audit")}
+          />
+          <Button
             icon="dashboard"
-            text="1. System & Node Runtime"
+            text="🖥️ Host & Node Runtime"
             active={activeCategory === "system"}
             intent={activeCategory === "system" ? Intent.PRIMARY : Intent.NONE}
             onClick={() => setActiveCategory("system")}
           />
           <Button
             icon="pulse"
-            text="2. Service Components"
+            text="⚡ Service Workers"
             active={activeCategory === "services"}
             intent={activeCategory === "services" ? Intent.PRIMARY : Intent.NONE}
             onClick={() => setActiveCategory("services")}
           />
           <Button
             icon="database"
-            text="3. Storage & Connectors"
+            text="🔌 Storage Vaults"
             active={activeCategory === "storage"}
             intent={activeCategory === "storage" ? Intent.PRIMARY : Intent.NONE}
             onClick={() => setActiveCategory("storage")}
           />
           <Button
             icon="time"
-            text="4. Task Scheduler"
+            text="⚙️ Task Scheduler"
             active={activeCategory === "scheduler"}
             intent={activeCategory === "scheduler" ? Intent.PRIMARY : Intent.NONE}
             onClick={() => setActiveCategory("scheduler")}
-          />
-          <Button
-            icon="shield"
-            text="5. Security & Audit Trail"
-            active={activeCategory === "security"}
-            intent={activeCategory === "security" ? Intent.PRIMARY : Intent.NONE}
-            onClick={() => setActiveCategory("security")}
           />
         </ButtonGroup>
       </Card>
@@ -227,11 +328,39 @@ export const ControlPanelApp: React.FC<{ isDarkMode?: boolean }> = () => {
         </div>
       ) : (
         <div>
+          {activeCategory === "security-governance" && (
+            <SecurityIdentityTab
+              pbacPurposes={pbacPurposes}
+              approvalRequests={approvalRequests}
+              security={security}
+              onRefresh={fetchTelemetry}
+            />
+          )}
+
+          {activeCategory === "resource-lifecycle" && (
+            <ResourceLifecycleTab
+              retentionPolicies={retentionPolicies}
+              apolloTracks={apolloTracks}
+              onRefresh={fetchTelemetry}
+            />
+          )}
+
+          {activeCategory === "environment-config" && (
+            <EnvironmentConfigTab
+              functionsConfig={functionsConfig}
+              broadcasts={broadcasts}
+              onRefresh={fetchTelemetry}
+            />
+          )}
+
+          {activeCategory === "lineage-audit" && (
+            <LineageAuditTab auditEvents={auditEvents} lineage={lineage} />
+          )}
+
           {activeCategory === "system" && <SystemRuntimeCategory metrics={systemMetrics} />}
           {activeCategory === "services" && <ServicesHealthCategory services={services} onRefresh={fetchTelemetry} />}
           {activeCategory === "storage" && <StorageConnectorsCategory storage={storage} onRefresh={fetchTelemetry} />}
           {activeCategory === "scheduler" && <TaskSchedulerCategory jobs={jobs} onRefresh={fetchTelemetry} />}
-          {activeCategory === "security" && <SecurityAuditCategory auditEvents={auditEvents} security={security} />}
         </div>
       )}
     </div>

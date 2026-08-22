@@ -5,6 +5,7 @@ import servicesRouter from "./routes/services";
 import storageRouter from "./routes/storage";
 import schedulerRouter from "./routes/scheduler";
 import securityRouter from "./routes/security";
+import governanceRouter from "./routes/governance";
 import { getRealSystemMetrics } from "./services/systemMonitor";
 
 const app = express();
@@ -19,6 +20,7 @@ app.use("/api/services", servicesRouter);
 app.use("/api/storage", storageRouter);
 app.use("/api/scheduler", schedulerRouter);
 app.use("/api/security", securityRouter);
+app.use("/api/governance", governanceRouter);
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {

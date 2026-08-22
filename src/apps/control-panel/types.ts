@@ -103,3 +103,87 @@ export interface SecurityTelemetryData {
     status: string;
   }>;
 }
+
+// ==========================================
+// Palantir Foundry Governance Types
+// ==========================================
+
+export interface PBACPurposeData {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  retentionDays: number;
+  assignedDatasetsCount: number;
+  authorizedUsersCount: number;
+  status: "ACTIVE" | "REVIEW_REQUIRED" | "RESTRICTED";
+  governor: string;
+}
+
+export interface ApprovalRequestData {
+  id: string;
+  title: string;
+  category: "DATA_ACCESS" | "SECURITY_OVERRIDE" | "SCHEMA_MUTATION" | "POLICY_CHANGE";
+  requestedBy: string;
+  requestedAt: string;
+  purpose: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  approversRequired: number;
+  approversCompleted: string[];
+  justification: string;
+}
+
+export interface RetentionPolicyData {
+  id: string;
+  name: string;
+  framework: "GDPR" | "FAA_EASA" | "FEDRAMP_IL6" | "SOC2";
+  retentionDuration: string;
+  autoPurgeEnabled: boolean;
+  lastPurgeTimestamp: string;
+  affectedDatasets: string[];
+  recordsManaged: number;
+}
+
+export interface ApolloReleaseTrackData {
+  track: "STABLE" | "CANARY" | "EXTENDED_SUPPORT";
+  currentVersion: string;
+  availableVersion: string;
+  releaseDate: string;
+  compatibilityScorePercent: number;
+  releaseNotes: string[];
+  status: "READY_TO_DEPLOY" | "UP_TO_DATE" | "TESTING_REQUIRED";
+}
+
+export interface FunctionsConfigData {
+  sandboxingEnabled: boolean;
+  allowedRuntimes: string[];
+  maxExecutionTimeoutSec: number;
+  memoryLimitMB: number;
+  allowOutboundHttp: boolean;
+  allowFileSystemWrite: boolean;
+  enableSimdVectorization: boolean;
+}
+
+export interface PlatformBroadcastData {
+  id: string;
+  message: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  active: boolean;
+  publishedAt: string;
+  author: string;
+}
+
+export interface LineageGraphData {
+  nodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+    health: string;
+    records: number;
+  }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    label: string;
+  }>;
+}
