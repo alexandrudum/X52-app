@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { Spinner, Tag, Intent } from "@blueprintjs/core";
+import { Spinner, Tag, Intent, Tooltip } from "@blueprintjs/core";
 import type { PDFDiffItem } from "./pdfDiffTypes";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -32,6 +32,7 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
 
   const isPre = side === "pre";
   const pageDiffs = diffItems.filter((d) => d.pageNumber === pageNum);
+  const selectedDiffOnPage = pageDiffs.find((d) => d.id === selectedDiffId);
 
   // Create native Blob URL as a 100% reliable fallback
   const objectUrl = useMemo(() => {
@@ -113,6 +114,7 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
         const context = canvas.getContext("2d");
         if (!context) return;
 
+        // Support high DPI displays
         const outputScale = window.devicePixelRatio || 1;
         canvas.width = Math.floor(viewport.width * outputScale);
         canvas.height = Math.floor(viewport.height * outputScale);
@@ -207,67 +209,127 @@ export const RealPDFPageView: React.FC<RealPDFPageViewProps> = ({
         }}
       />
 
-      {/* Floating Small Warning Tags with Marker Lines Overlaid on the PDF Page */}
+      {/* Sleek Top-Right Summary Pill (Does not block text) */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          zIndex: 5,
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+        }}
+      >
+        <Tag
+          intent={pageDiffs.length > 0 ? (isPre ? Intent.DANGER : Intent.SUCCESS) : Intent.NONE}
+          round
+          style={{
+            fontWeight: 800,
+            fontSize: "10px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          }}
+        >
+          {pageDiffs.length > 0
+            ? `${pageDiffs.length} Change${pageDiffs.length > 1 ? "s" : ""} on Page ${pageNum}`
+            : `Page ${pageNum} • No Changes`}
+        </Tag>
+      </div>
+
+      {/* Sleek Focus Banner: Only displayed when a specific diff on this page is selected */}
+      {selectedDiffOnPage && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "12px",
+            left: "12px",
+            right: "12px",
+            padding: "8px 14px",
+            borderRadius: "6px",
+            backgroundColor: isPre ? "rgba(239, 68, 68, 0.95)" : "rgba(34, 197, 94, 0.95)",
+            color: "#ffffff",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            zIndex: 6,
+            fontSize: "11px",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+            <Tag
+              round
+              style={{
+                backgroundColor: "#ffffff",
+                color: isPre ? "#ef4444" : "#16a34a",
+                fontWeight: 800,
+                fontSize: "10px",
+              }}
+            >
+              #{diffItems.findIndex((d) => d.id === selectedDiffOnPage.id) + 1}
+            </Tag>
+            <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {selectedDiffOnPage.title}
+            </strong>
+          </div>
+          <Tag minimal style={{ fontSize: "9px", backgroundColor: "rgba(255,255,255,0.2)", color: "#ffffff" }}>
+            {selectedDiffOnPage.category}
+          </Tag>
+        </div>
+      )}
+
+      {/* Compact Right-Margin Indicator Badges */}
       {pageDiffs.length > 0 && (
         <div
           style={{
             position: "absolute",
-            top: "16px",
-            right: "16px",
+            top: "45px",
+            right: "6px",
             display: "flex",
             flexDirection: "column",
-            gap: "6px",
-            maxWidth: "240px",
+            gap: "4px",
             zIndex: 5,
+            maxHeight: "80%",
+            overflowY: "auto",
           }}
         >
           {pageDiffs.map((diff) => {
             const isSelected = selectedDiffId === diff.id;
             const diffNum = diffItems.findIndex((d) => d.id === diff.id) + 1;
             return (
-              <div
-                key={diff.id}
-                onClick={() => onSelectDiff(diff.id)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 8px",
-                  borderRadius: "20px",
-                  backgroundColor: isSelected
-                    ? isPre
-                      ? "#ef4444"
-                      : "#22c55e"
-                    : isPre
-                    ? "rgba(239, 68, 68, 0.9)"
-                    : "rgba(34, 197, 94, 0.9)",
-                  color: "#ffffff",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-                  cursor: "pointer",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.4)",
-                  transform: isSelected ? "scale(1.05)" : "scale(1)",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <Tag
-                  round
-                  minimal
+              <Tooltip key={diff.id} content={`Diff #${diffNum}: ${diff.title}`} placement="left">
+                <button
+                  type="button"
+                  onClick={() => onSelectDiff(diff.id)}
                   style={{
-                    fontWeight: 800,
+                    width: "22px",
+                    height: "22px",
+                    borderRadius: "50%",
+                    backgroundColor: isSelected
+                      ? isPre
+                        ? "#ef4444"
+                        : "#22c55e"
+                      : isPre
+                      ? "rgba(239, 68, 68, 0.75)"
+                      : "rgba(34, 197, 94, 0.75)",
+                    color: "#ffffff",
+                    border: isSelected ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.4)",
+                    boxShadow: isSelected ? "0 0 8px rgba(0,0,0,0.5)" : "none",
+                    cursor: "pointer",
                     fontSize: "9px",
-                    backgroundColor: "#ffffff",
-                    color: isPre ? "#ef4444" : "#16a34a",
-                    padding: "1px 5px",
+                    fontWeight: 800,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 0,
+                    transform: isSelected ? "scale(1.2)" : "scale(1)",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  #{diffNum}
-                </Tag>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {diff.title}
-                </span>
-              </div>
+                  {diffNum}
+                </button>
+              </Tooltip>
             );
           })}
         </div>
