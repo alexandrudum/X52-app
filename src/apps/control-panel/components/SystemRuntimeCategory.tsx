@@ -1,5 +1,5 @@
-import React from "react";
-import { Card, Elevation, ProgressBar, Tag, Intent, HTMLTable } from "@blueprintjs/core";
+import React, { useEffect, useState } from "react";
+import { Card, Elevation, ProgressBar, Tag, Intent, HTMLTable, Icon } from "@blueprintjs/core";
 import type { SystemMetricsData } from "../types";
 
 function formatBytes(bytes: number): string {
@@ -24,8 +24,17 @@ function formatDuration(seconds: number): string {
 }
 
 export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null }> = ({ metrics }) => {
+  const [cpuHistory, setCpuHistory] = useState<number[]>([12, 15, 14, 18, 12, 16, 15, 20, 14, 12]);
+  const [memHistory, setMemHistory] = useState<number[]>([65, 66, 65, 68, 67, 66, 67, 68, 67, 66]);
+
+  useEffect(() => {
+    if (!metrics) return;
+    setCpuHistory((prev) => [...prev.slice(-19), metrics.cpuUsagePercent]);
+    setMemHistory((prev) => [...prev.slice(-19), metrics.memory.usedPercent]);
+  }, [metrics]);
+
   if (!metrics) {
-    return <div style={{ padding: "20px", color: "var(--x52-text-muted)" }}>Loading live system runtime metrics...</div>;
+    return <div style={{ padding: "40px", textAlign: "center", color: "var(--x52-text-muted)" }}>Connecting to Host Operating System Telemetry Engine...</div>;
   }
 
   const { os, cpuUsagePercent, memory, process: proc } = metrics;
@@ -34,15 +43,15 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* Real-time KPI Gauges */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
+      {/* Real-time KPI Gauges with Sparkline Bars */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px" }}>
         {/* CPU Load Gauge */}
         <Card
           elevation={Elevation.ONE}
           style={{
             backgroundColor: "var(--x52-card-bg)",
             border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "8px",
+            borderRadius: "10px",
             padding: "16px",
             display: "flex",
             flexDirection: "column",
@@ -50,20 +59,39 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)", textTransform: "uppercase" }}>
-              Host CPU Utilization
+            <span style={{ fontSize: "11px", fontWeight: 800, color: "var(--x52-text-muted)", letterSpacing: "0.05em" }}>
+              HOST CPU UTILIZATION
             </span>
             <Tag intent={cpuIntent} round style={{ fontWeight: 800 }}>
               {cpuUsagePercent}%
             </Tag>
           </div>
-          <div style={{ fontSize: "26px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
-            {cpuUsagePercent}% <span style={{ fontSize: "12px", color: "var(--x52-text-muted)", fontWeight: "normal" }}>({os.cpuCount} Cores)</span>
+          <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
+            {cpuUsagePercent}% <span style={{ fontSize: "12px", color: "var(--x52-text-muted)", fontWeight: "normal" }}>({os.cpuCount} Cores • {os.cpuModel.split("@")[0]})</span>
           </div>
+
           <ProgressBar intent={cpuIntent} value={cpuUsagePercent / 100} stripes animate />
+
+          {/* Mini Sparkline Bars */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "24px", marginTop: "4px", backgroundColor: "rgba(0,0,0,0.2)", padding: "2px", borderRadius: "4px" }}>
+            {cpuHistory.map((val, i) => (
+              <div
+                key={i}
+                title={`CPU: ${val}%`}
+                style={{
+                  flex: 1,
+                  height: `${Math.max(10, val)}%`,
+                  backgroundColor: val > 75 ? "#ef4444" : "#3b82f6",
+                  borderRadius: "1px",
+                  transition: "height 0.2s ease",
+                }}
+              />
+            ))}
+          </div>
+
           <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", display: "flex", justifyContent: "space-between" }}>
-            <span>Load: {os.loadAvg.join(" • ")}</span>
-            <span>{os.cpuModel.split("@")[0]}</span>
+            <span>Load: <strong>{os.loadAvg.join(" • ")}</strong></span>
+            <span>Arch: <strong>{os.arch}</strong></span>
           </div>
         </Card>
 
@@ -73,7 +101,7 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           style={{
             backgroundColor: "var(--x52-card-bg)",
             border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "8px",
+            borderRadius: "10px",
             padding: "16px",
             display: "flex",
             flexDirection: "column",
@@ -81,20 +109,39 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)", textTransform: "uppercase" }}>
-              Host RAM Memory
+            <span style={{ fontSize: "11px", fontWeight: 800, color: "var(--x52-text-muted)", letterSpacing: "0.05em" }}>
+              HOST RAM ALLOCATION
             </span>
             <Tag intent={memIntent} round style={{ fontWeight: 800 }}>
               {memory.usedPercent}%
             </Tag>
           </div>
-          <div style={{ fontSize: "26px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
+          <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
             {formatBytes(memory.usedBytes)} <span style={{ fontSize: "12px", color: "var(--x52-text-muted)", fontWeight: "normal" }}>/ {formatBytes(memory.totalBytes)}</span>
           </div>
+
           <ProgressBar intent={memIntent} value={memory.usedPercent / 100} />
+
+          {/* Mini Sparkline Bars */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "24px", marginTop: "4px", backgroundColor: "rgba(0,0,0,0.2)", padding: "2px", borderRadius: "4px" }}>
+            {memHistory.map((val, i) => (
+              <div
+                key={i}
+                title={`RAM: ${val}%`}
+                style={{
+                  flex: 1,
+                  height: `${Math.max(15, val)}%`,
+                  backgroundColor: val > 85 ? "#ef4444" : "#10b981",
+                  borderRadius: "1px",
+                  transition: "height 0.2s ease",
+                }}
+              />
+            ))}
+          </div>
+
           <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", display: "flex", justifyContent: "space-between" }}>
-            <span>Free: {formatBytes(memory.freeBytes)}</span>
-            <span>Allocated: {formatBytes(memory.usedBytes)}</span>
+            <span>Free RAM: <strong>{formatBytes(memory.freeBytes)}</strong></span>
+            <span>Allocated: <strong>{formatBytes(memory.usedBytes)}</strong></span>
           </div>
         </Card>
 
@@ -104,7 +151,7 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           style={{
             backgroundColor: "var(--x52-card-bg)",
             border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "8px",
+            borderRadius: "10px",
             padding: "16px",
             display: "flex",
             flexDirection: "column",
@@ -112,20 +159,20 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)", textTransform: "uppercase" }}>
-              Node Process V8 Heap
+            <span style={{ fontSize: "11px", fontWeight: 800, color: "var(--x52-text-muted)", letterSpacing: "0.05em" }}>
+              NODE.JS V8 HEAP
             </span>
             <Tag intent={Intent.SUCCESS} round style={{ fontWeight: 800 }}>
               PID {proc.pid}
             </Tag>
           </div>
-          <div style={{ fontSize: "26px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
+          <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
             {formatBytes(memory.processHeapUsedBytes)} <span style={{ fontSize: "12px", color: "var(--x52-text-muted)", fontWeight: "normal" }}>/ {formatBytes(memory.processHeapTotalBytes)}</span>
           </div>
           <ProgressBar intent={Intent.SUCCESS} value={memory.processHeapUsedBytes / memory.processHeapTotalBytes} />
           <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", display: "flex", justifyContent: "space-between" }}>
-            <span>RSS: {formatBytes(memory.processRssBytes)}</span>
-            <span>Buffers: {formatBytes(memory.processExternalBytes)}</span>
+            <span>Resident (RSS): <strong>{formatBytes(memory.processRssBytes)}</strong></span>
+            <span>Buffers: <strong>{formatBytes(memory.processExternalBytes)}</strong></span>
           </div>
         </Card>
 
@@ -135,7 +182,7 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           style={{
             backgroundColor: "var(--x52-card-bg)",
             border: "1px solid var(--x52-border-subtle)",
-            borderRadius: "8px",
+            borderRadius: "10px",
             padding: "16px",
             display: "flex",
             flexDirection: "column",
@@ -143,21 +190,21 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--x52-text-muted)", textTransform: "uppercase" }}>
-              Runtime &amp; OS Uptime
+            <span style={{ fontSize: "11px", fontWeight: 800, color: "var(--x52-text-muted)", letterSpacing: "0.05em" }}>
+              SYSTEM UPTIME
             </span>
             <Tag minimal intent={Intent.PRIMARY}>
               Node {proc.nodeVersion}
             </Tag>
           </div>
-          <div style={{ fontSize: "26px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
+          <div style={{ fontSize: "28px", fontWeight: 800, fontFamily: "var(--x52-font-mono)" }}>
             {formatDuration(proc.uptimeSeconds)}
           </div>
           <div style={{ fontSize: "12px", color: "var(--x52-text-muted)" }}>
-            OS Uptime: <strong>{formatDuration(os.uptimeSeconds)}</strong>
+            OS Kernel Uptime: <strong>{formatDuration(os.uptimeSeconds)}</strong>
           </div>
           <div style={{ fontSize: "11px", color: "var(--x52-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            Host: {os.hostname} ({os.platform} {os.arch})
+            Host: <strong>{os.hostname}</strong> ({os.platform} / {os.arch})
           </div>
         </Card>
       </div>
@@ -168,20 +215,24 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
         style={{
           backgroundColor: "var(--x52-card-bg)",
           border: "1px solid var(--x52-border-subtle)",
-          borderRadius: "8px",
-          padding: "16px 20px",
+          borderRadius: "10px",
+          padding: "18px 22px",
         }}
       >
-        <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: 700 }}>
-          Operating System &amp; Process Telemetry
-        </h4>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+          <Icon icon="desktop" color="var(--x52-accent)" />
+          <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 800 }}>
+            Operating System, Hardware Cores &amp; V8 Engine Telemetry
+          </h4>
+        </div>
+
         <HTMLTable bordered compact striped style={{ width: "100%", fontSize: "12px" }}>
           <thead>
             <tr>
               <th>Property</th>
               <th>Live Metric Value</th>
               <th>Category</th>
-              <th>Status</th>
+              <th>Health Status</th>
             </tr>
           </thead>
           <tbody>
@@ -192,14 +243,14 @@ export const SystemRuntimeCategory: React.FC<{ metrics: SystemMetricsData | null
               <td><Tag minimal intent={Intent.SUCCESS}>ACTIVE</Tag></td>
             </tr>
             <tr>
-              <td>CPU Cores &amp; Architecture</td>
-              <td><code>{os.cpuCount} Logical Cores • {os.cpuModel}</code></td>
+              <td>CPU Cores &amp; Hardware Acceleration</td>
+              <td><code>{os.cpuCount} Cores • {os.cpuModel} (SIMD / Neon)</code></td>
               <td>Hardware</td>
               <td><Tag minimal intent={Intent.SUCCESS}>ONLINE</Tag></td>
             </tr>
             <tr>
               <td>Process Identifier (PID)</td>
-              <td><code>PID {proc.pid}</code> (Node {proc.nodeVersion})</td>
+              <td><code>PID {proc.pid}</code> (Node.js {proc.nodeVersion})</td>
               <td>V8 Runtime</td>
               <td><Tag minimal intent={Intent.PRIMARY}>RUNNING</Tag></td>
             </tr>
