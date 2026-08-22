@@ -15,11 +15,24 @@ import { AppWorkbench } from "../../apps/app-workbench";
 import { RAGExplorerApp } from "../../apps/rag-explorer";
 import { ComparatorApp } from "../../apps/comparator";
 import { PalantirWorkshopApp } from "../../apps/workshop";
+import { PDFComparatorApp } from "../../apps/pdf-comparator";
 import { BackendControlPanel } from "../../components/admin/BackendControlPanel";
 import Dashboard from "../../Dashboard";
 
 // Register all Suite Applications in the X52 Core
 const suiteApps: X52AppManifest[] = [
+  {
+    id: "pdf-diff",
+    name: "PDF Diff Auditor",
+    shortName: "PDF",
+    description: "Dual PDF split-screen comparison with inline line callouts, warning inspector sidebar, and compliance audit.",
+    version: "1.0.0",
+    icon: "document-share",
+    category: "governance",
+    intent: "danger",
+    standaloneRoute: "/?app=pdf-diff",
+    component: PDFComparatorApp,
+  },
   {
     id: "workshop",
     name: "Foundry Workshop",
