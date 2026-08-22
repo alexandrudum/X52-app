@@ -1,8 +1,8 @@
-import Dashboard from './Dashboard'
+import { PlatformShell } from './core/layout/PlatformShell'
 
 function App() {
   return (
-    <Dashboard />
+    <PlatformShell />
   )
 }
 
