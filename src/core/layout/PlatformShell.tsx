@@ -18,11 +18,23 @@ import { RAGExplorerApp } from "../../apps/rag-explorer";
 import { ComparatorApp } from "../../apps/comparator";
 import { PalantirWorkshopApp } from "../../apps/workshop";
 import { PDFComparatorApp } from "../../apps/pdf-comparator";
-import { BackendControlPanel } from "../../components/admin/BackendControlPanel";
+import { ControlPanelApp } from "../../apps/control-panel";
 import Dashboard from "../../Dashboard";
 
 // Register all Suite Applications in the X52 Core
 const suiteApps: X52AppManifest[] = [
+  {
+    id: "control-panel",
+    name: "Control Panel",
+    shortName: "CTL",
+    description: "Real-time Node.js host telemetry, CPU/RAM gauges, worker services health, storage vaults, task scheduler, and security audit stream.",
+    version: "1.0.0",
+    icon: "control",
+    category: "governance",
+    intent: "primary",
+    standaloneRoute: "/?app=control-panel",
+    component: ControlPanelApp,
+  },
   {
     id: "pdf-diff",
     name: "PDF Diff Auditor",
@@ -118,18 +130,6 @@ const suiteApps: X52AppManifest[] = [
     intent: "warning",
     standaloneRoute: "/?app=ontology-explorer",
     component: OntologyExplorerApp,
-  },
-  {
-    id: "control-plane",
-    name: "Backend Control Plane",
-    shortName: "CTL",
-    description: "Cluster node scaling, data source connector latency testing, and API secret vault.",
-    version: "1.0.0",
-    icon: "control",
-    category: "governance",
-    intent: "danger",
-    standaloneRoute: "/?app=control-plane",
-    component: BackendControlPanel,
   },
 ];
 

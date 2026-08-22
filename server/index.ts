@@ -1,31 +1,37 @@
 import express from "express";
 import cors from "cors";
-import clusterRouter from "./routes/cluster";
-import connectorsRouter from "./routes/connectors";
-import securityRouter from "./routes/security";
+import systemRouter from "./routes/system";
+import servicesRouter from "./routes/services";
+import storageRouter from "./routes/storage";
 import schedulerRouter from "./routes/scheduler";
+import securityRouter from "./routes/security";
+import { getRealSystemMetrics } from "./services/systemMonitor";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+app.use(cors({ origin: ["http://localhost:5173", "http://localhost:4000"] }));
 app.use(express.json());
 
 // Mount API routes
-app.use("/api/cluster", clusterRouter);
-app.use("/api/connectors", connectorsRouter);
-app.use("/api/security", securityRouter);
+app.use("/api/system", systemRouter);
+app.use("/api/services", servicesRouter);
+app.use("/api/storage", storageRouter);
 app.use("/api/scheduler", schedulerRouter);
+app.use("/api/security", securityRouter);
 
 // Health check endpoint
 app.get("/api/health", (_req, res) => {
+  const metrics = getRealSystemMetrics();
   res.json({
     status: "HEALTHY",
     service: "X52 Backend Control Service",
-    version: "0.0.1",
+    version: "1.0.0",
     timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
-    memoryUsageMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    uptimeSeconds: metrics.process.uptimeSeconds,
+    memoryUsageMB: metrics.process.memoryUsageMB,
+    cpuUsagePercent: metrics.cpuUsagePercent,
+    nodeVersion: metrics.process.nodeVersion,
   });
 });
 

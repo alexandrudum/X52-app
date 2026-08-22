@@ -1,89 +1,60 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
+import { getAuditEvents, logAuditEvent } from "../services/auditLogger";
 
 const router = Router();
 
-interface ApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  role: "ADMIN" | "OPERATOR" | "READ_ONLY";
-  created: string;
-  lastUsed: string;
-  status: "ACTIVE" | "REVOKED";
-}
-
-let apiKeys: ApiKey[] = [
-  {
-    id: "key-x52-root",
-    name: "Production Ingestion Root Key",
-    prefix: "x52_live_9f8a",
-    role: "ADMIN",
-    created: "2026-08-01",
-    lastUsed: "2m ago",
-    status: "ACTIVE",
-  },
-  {
-    id: "key-foundry-bridge",
-    name: "Foundry Data Sync Service Token",
-    prefix: "x52_live_3c2d",
-    role: "OPERATOR",
-    created: "2026-08-10",
-    lastUsed: "Just now",
-    status: "ACTIVE",
-  },
-  {
-    id: "key-analyst-ro",
-    name: "BI & Dashboard Read-Only Token",
-    prefix: "x52_live_1e7b",
-    role: "READ_ONLY",
-    created: "2026-08-15",
-    lastUsed: "4h ago",
-    status: "ACTIVE",
-  },
-];
-
-// GET /api/security/keys
-router.get("/keys", (_req: Request, res: Response) => {
-  res.json({ success: true, data: apiKeys });
-});
-
-// POST /api/security/keys
-router.post("/keys", (req: Request, res: Response) => {
-  const { name, role } = req.body;
-  if (!name) {
-    return res.status(400).json({ success: false, error: "Key name is required" });
-  }
-
-  const randomHex = Math.random().toString(16).substring(2, 6);
-  const newKey: ApiKey = {
-    id: `key-${Date.now()}`,
-    name,
-    prefix: `x52_live_${randomHex}`,
-    role: role || "OPERATOR",
-    created: new Date().toISOString().split("T")[0],
-    lastUsed: "Never",
-    status: "ACTIVE",
-  };
-
-  apiKeys.unshift(newKey);
-  res.status(201).json({
+// GET /api/security/audit
+router.get("/audit", (req, res) => {
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  res.json({
     success: true,
-    data: newKey,
-    rawSecret: `x52_live_${randomHex}_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`,
+    data: getAuditEvents(limit),
   });
 });
 
-// DELETE /api/security/keys/:id
-router.delete("/keys/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
-  const key = apiKeys.find((k) => k.id === id);
+// GET /api/security/telemetry
+router.get("/telemetry", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      authMode: "SESSION_LOCAL",
+      activeSessions: 1,
+      tlsEnabled: false,
+      corsAllowedOrigins: ["http://localhost:5173", "http://localhost:4000"],
+      rateLimiter: {
+        windowMs: 60000,
+        maxRequestsPerWindow: 1200,
+        currentWindowRequests: 84,
+      },
+      apiTokens: [
+        {
+          id: "TOK-ADMIN-PRIMARY",
+          name: "Platform Master Admin Key",
+          prefix: "x52_live_adm_...",
+          role: "SUPER_ADMIN",
+          createdAt: "2026-08-20T10:00:00.000Z",
+          expiresAt: "2027-08-20T10:00:00.000Z",
+          status: "ACTIVE",
+        },
+        {
+          id: "TOK-PDF-INGEST",
+          name: "Document Ingestion Automation Key",
+          prefix: "x52_live_ing_...",
+          role: "WRITE_INGEST",
+          createdAt: "2026-08-21T12:00:00.000Z",
+          expiresAt: "2027-08-21T12:00:00.000Z",
+          status: "ACTIVE",
+        },
+      ],
+    },
+  });
+});
 
-  if (!key) {
-    return res.status(404).json({ success: false, error: "Key not found" });
-  }
-
-  key.status = "REVOKED";
-  res.json({ success: true, message: `Key ${key.name} has been revoked.`, key });
+// POST /api/security/audit/log
+router.post("/audit/log", (req, res) => {
+  const { category, action, details, severity } = req.body;
+  const event = logAuditEvent(category || "SYSTEM", action || "USER_ACTION", details || "", severity || "INFO");
+  res.json({ success: true, event });
 });
 
 export default router;
